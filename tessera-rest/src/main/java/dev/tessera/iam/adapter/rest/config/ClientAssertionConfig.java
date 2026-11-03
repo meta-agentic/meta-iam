@@ -109,7 +109,8 @@ public interface ClientAssertionConfig {
          * Whether a {@code jti} may be presented only once. Off by default: a platform token is
          * typically exchanged again and again until the platform rotates it, so its {@code jti} is
          * recorded and reuse is allowed until {@code exp}. Turn it on for an issuer that mints a
-         * fresh token for every request.
+         * fresh token for every request. It needs {@link #requireJti()}, or the server refuses to
+         * start: a token without a {@code jti} could otherwise be reused without limit.
          */
         @WithDefault("false")
         boolean enforceSingleUse();

@@ -57,7 +57,8 @@ import org.jboss.logging.Logger;
  * changes its answer in between could reach a refused address. The URLs come from configuration,
  * which bounds that to an operator's own mistake or a hostile DNS.
  *
- * <p>The configuration is checked at startup ({@link Startup}).
+ * <p>The configuration is checked at startup ({@link Startup}): an issuer that enforces single use
+ * must also require a {@code jti}, since a token without one could not be held to a single use.
  */
 @Startup
 @Singleton
@@ -129,6 +130,11 @@ public class TrustedIssuerJwks {
             if (lifetime == null || !lifetime.isPositive() || lifetime.compareTo(MAX_LIFETIME_CEILING) > 0) {
                 throw new IllegalArgumentException("iam.client-assertion.trusted-issuers.*.max-lifetime must be "
                         + "positive and at most " + MAX_LIFETIME_CEILING + ", was " + lifetime);
+            }
+            if (config.policy().enforceSingleUse() && !config.policy().requireJti()) {
+                // Single use is kept by jti: a token without one would be reusable without limit.
+                throw new IllegalArgumentException("iam.client-assertion.trusted-issuers.*.enforce-single-use needs "
+                        + "require-jti=true, for issuer " + issuer);
             }
             byIssuer.put(requireHttps("issuer", issuer),
                     new Trusted(URI.create(requireHttps("jwks-uri", config.jwksUri())), config.policy()));
