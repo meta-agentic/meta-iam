@@ -97,7 +97,7 @@ class ExternalIssuerAssertionTest {
         now.set(now.get().plus(Duration.ofMinutes(61)));
         assertThat(verify(lenient, trust, withJti)).as("after exp").isFalse();
 
-        NimbusClientAssertionVerifier singleUse = verifier(Duration.ofHours(1), false, true, 10);
+        NimbusClientAssertionVerifier singleUse = verifier(Duration.ofHours(1), true, true, 10);
         String once = token(c -> c.jwtID("once"));
         assertThat(verify(singleUse, trust, once)).isTrue();
         assertThat(verify(singleUse, trust, once)).as("single use enforced").isFalse();
@@ -135,7 +135,7 @@ class ExternalIssuerAssertionTest {
     @Test
     @DisplayName("with single use enforced, a workload's jti is spent once across realms, not once per realm")
     void jtiIsSpentAcrossRealms() {
-        NimbusClientAssertionVerifier verifier = verifier(Duration.ofHours(1), false, true, 10);
+        NimbusClientAssertionVerifier verifier = verifier(Duration.ofHours(1), true, true, 10);
         String token = token(c -> c.jwtID("global"));
         RealmKey otherRealm = new RealmKey(TenantId.generate(), BaselineId.generate());
         assertThat(verifier.verifyNow(REALM, trust, token, now.get())).isTrue();

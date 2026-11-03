@@ -228,4 +228,20 @@ class TrustedIssuerJwksTest {
         assertThat(jwks.policy(ISSUER)).isEqualTo(new TrustedIssuerJwks.Policy(Duration.ofMinutes(5), false, false));
         assertThat(jwks.policy("https://other.example")).isNull();
     }
+
+    @Test
+    @DisplayName("an issuer that enforces single use without requiring a jti is refused at startup")
+    void singleUseNeedsAJti() {
+        Map<String, TrustedIssuerJwks.Issuer> unbounded = Map.of(ISSUER,
+                new TrustedIssuerJwks.Issuer(JWKS_URI, new TrustedIssuerJwks.Policy(Duration.ofMinutes(5), false, true)));
+        assertThatThrownBy(() -> new TrustedIssuerJwks(null, clock, unbounded, TTL, MIN_REFRESH, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("enforce-single-use needs require-jti=true")
+                .hasMessageContaining(ISSUER);
+
+        TrustedIssuerJwks.Policy strict = new TrustedIssuerJwks.Policy(Duration.ofMinutes(5), true, true);
+        TrustedIssuerJwks accepted = new TrustedIssuerJwks(null, clock,
+                Map.of(ISSUER, new TrustedIssuerJwks.Issuer(JWKS_URI, strict)), TTL, MIN_REFRESH, null, null);
+        assertThat(accepted.policy(ISSUER)).isEqualTo(strict);
+    }
 }

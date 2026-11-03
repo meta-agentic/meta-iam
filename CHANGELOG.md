@@ -65,5 +65,9 @@ Accumulating toward the first release, `26.1.0 "Andromeda"`.
   identifier. A resource server that introspected as a public client must be registered as a
   confidential client and present its credential. `/revoke` is unchanged: a public client may
   still revoke the tokens issued to it (RFC 7009 §2.1).
+- Keyless (workload-identity) clients: a trusted issuer configured with
+  `enforce-single-use=true` must also set `require-jti=true`, or the server refuses to start.
+  Single use is kept by `jti`, so a token without one was accepted again and again until it
+  expired. A deployment that set the first switch alone must add the second.
 
 [Unreleased]: https://github.com/meta-agentic/meta-iam/commits/main
