@@ -69,5 +69,9 @@ Accumulating toward the first release, `26.1.0 "Andromeda"`.
   `enforce-single-use=true` must also set `require-jti=true`, or the server refuses to start.
   Single use is kept by `jti`, so a token without one was accepted again and again until it
   expired. A deployment that set the first switch alone must add the second.
+- A workload-identity client's `assertion_issuer` and `assertion_subject` can no longer be
+  registered empty or with leading or trailing white space (migration V12). Tokens carry them
+  exactly, so such a client could never authenticate; the migration fails on an existing row
+  that breaks the rule, naming it, instead of keeping a client that silently cannot sign in.
 
 [Unreleased]: https://github.com/meta-agentic/meta-iam/commits/main
