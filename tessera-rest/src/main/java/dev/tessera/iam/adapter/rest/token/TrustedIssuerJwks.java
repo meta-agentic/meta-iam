@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import javax.net.ssl.SSLContext;
 import org.jboss.logging.Logger;
 
 /**
@@ -68,7 +69,7 @@ public class TrustedIssuerJwks {
     static final int MAX_KEYS = 20;
     static final Duration MIN_REFRESH_FLOOR = Duration.ofSeconds(5);
     static final Duration MAX_LIFETIME_CEILING = Duration.ofHours(1);
-    private static final Duration DEADLINE = Duration.ofSeconds(5);
+    static final Duration DEADLINE = Duration.ofSeconds(5);
     private static final Logger LOG = Logger.getLogger(TrustedIssuerJwks.class);
 
     /** Fetches a URL, within its own deadline and size limit. */
@@ -110,11 +111,17 @@ public class TrustedIssuerJwks {
 
     @Inject
     public TrustedIssuerJwks(Vertx vertx, Clock clock, ClientAssertionConfig config) {
-        this(vertx, clock::instant,
+        this(vertx, clock::instant, config, https(DEADLINE), InetAddress::getAllByName);
+    }
+
+    /** The configured issuers, fetched through {@code transport}: for a test's local stub issuer. */
+    TrustedIssuerJwks(Vertx vertx, Supplier<Instant> clock, ClientAssertionConfig config, Transport transport,
+            Resolver resolver) {
+        this(vertx, clock,
                 config.trustedIssuers().values().stream().collect(Collectors.toMap(
                         ClientAssertionConfig.TrustedIssuer::issuer, issuer -> new Issuer(issuer.jwksUri(),
                                 new Policy(issuer.maxLifetime(), issuer.requireJti(), issuer.enforceSingleUse())))),
-                config.jwksCacheTtl(), config.jwksMinRefreshInterval(), https(DEADLINE), InetAddress::getAllByName);
+                config.jwksCacheTtl(), config.jwksMinRefreshInterval(), transport, resolver);
     }
 
     TrustedIssuerJwks(Vertx vertx, Supplier<Instant> clock, Map<String, Issuer> issuers, Duration ttl,
@@ -286,7 +293,19 @@ public class TrustedIssuerJwks {
 
     /** One deadline over connection, headers and body; the body is limited while it streams. */
     static Transport https(Duration deadline) {
-        HttpClient client = HttpClient.newBuilder()
+        return https(deadline, null);
+    }
+
+    /**
+     * As {@link #https(Duration)}, trusting the given TLS context instead of the JDK's default, or
+     * the default when it is {@code null}. Only tests pass one, to fetch from a local stub issuer.
+     */
+    static Transport https(Duration deadline, SSLContext tls) {
+        HttpClient.Builder builder = HttpClient.newBuilder();
+        if (tls != null) {
+            builder.sslContext(tls);
+        }
+        HttpClient client = builder
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .proxy(HttpClient.Builder.NO_PROXY)
                 .connectTimeout(deadline)
