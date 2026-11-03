@@ -257,6 +257,26 @@ class DbClientRepositoryIT {
         }
     }
 
+    @Test
+    @RunOnVertxContext
+    @DisplayName("a workload identity's issuer or subject that is empty or has surrounding white space is refused")
+    void workloadIdentityIsRegisteredTrimmed(UniAsserter asserter) {
+        UUID tenant = UUID.randomUUID();
+        for (String bad : List.of("", " sa-pad", "sa-pad ", "\tsa-pad", "sa-pad\n")) {
+            OAuthClientEntity badSubject = workload(tenant, UUID.randomUUID(), "wl-sub-" + UUID.randomUUID(), bad);
+            asserter.assertFailedWith(() -> scoped(tenant, s -> s.persist(badSubject).call(s::flush)), failure ->
+                    Assertions.assertThat(failure).hasStackTraceContaining("ck_oauth_client_assertion_subject_trimmed"));
+            OAuthClientEntity badIssuer = workload(tenant, UUID.randomUUID(), "wl-iss-" + UUID.randomUUID(),
+                    "sa-" + UUID.randomUUID());
+            badIssuer.assertionIssuer = bad.isEmpty() ? "" : bad.replace("sa-pad", "https://platform.example");
+            asserter.assertFailedWith(() -> scoped(tenant, s -> s.persist(badIssuer).call(s::flush)), failure ->
+                    Assertions.assertThat(failure).hasStackTraceContaining("ck_oauth_client_assertion_issuer_trimmed"));
+        }
+        String inner = "system:serviceaccount:orders:billing " + UUID.randomUUID();
+        asserter.execute(() -> scoped(tenant, s ->
+                s.persist(workload(tenant, UUID.randomUUID(), "wl-inner-space", inner)).call(s::flush)));
+    }
+
     private static OAuthClientEntity workload(UUID tenant, UUID id, String key, String subject) {
         OAuthClientEntity e = confidential(tenant, id, key, null);
         e.authMethod = "WORKLOAD_IDENTITY";
