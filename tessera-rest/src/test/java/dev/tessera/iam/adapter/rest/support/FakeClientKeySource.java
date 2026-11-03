@@ -10,7 +10,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Test double for {@link ClientKeySourcePort}: the {@code private_key_jwt} client of
- * {@link FakeClientRepository} has the public keys of {@link #CLIENT}; no other client has any.
+ * {@link FakeClientRepository} has the public keys of {@link #CLIENT}; a {@link FakeWorkloads}
+ * client trusts its registered issuer and subject, with the issuer's keys; no other client has any.
  */
 @Mock
 @ApplicationScoped
@@ -22,8 +23,10 @@ public class FakeClientKeySource implements ClientKeySourcePort {
     @Override
     public Uni<AssertionTrust> trustFor(RealmKey realm, ClientId clientId) {
         String keyed = FakeClientRepository.KEYED_CLIENT_ID;
-        return Uni.createFrom().item(FakeClientRepository.KEYED_IDENTITY.equals(clientId)
-                ? new AssertionTrust(keyed, keyed, CLIENT.jwks())
-                : null);
+        if (FakeClientRepository.KEYED_IDENTITY.equals(clientId)) {
+            return Uni.createFrom().item(new AssertionTrust(keyed, keyed, CLIENT.jwks()));
+        }
+        FakeWorkloads.Workload workload = FakeWorkloads.byIdentity(clientId);
+        return Uni.createFrom().item(workload == null ? null : AssertionTrust.ofIssuer(workload.issuer(), workload.subject()));
     }
 }

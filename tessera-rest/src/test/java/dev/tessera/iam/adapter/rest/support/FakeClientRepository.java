@@ -28,7 +28,8 @@ import java.util.UUID;
  *   <li>{@code confidential-web} — a {@link ConfidentialClient} that authenticates with a
  *       {@code client_secret} (verified by {@link FakeClientSecretVerifier});</li>
  *   <li>{@code no-code-client} — a confidential client that is <em>not</em> allowed the
- *       authorization-code grant, to exercise the {@code unauthorized_client} path.</li>
+ *       authorization-code grant, to exercise the {@code unauthorized_client} path;</li>
+ *   <li>the workload-identity clients of {@link FakeWorkloads}, in {@link #MACHINE_TENANT} only.</li>
  * </ul>
  * Any other {@code client_id} resolves to {@code null} (unknown client). Resolution ignores
  * the realm beyond requiring it (a single test realm is used).
@@ -107,8 +108,17 @@ public class FakeClientRepository implements ClientRepositoryPort {
                     ? new ConfidentialClient(KEYED_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
                             ClientAuthMethod.PRIVATE_KEY_JWT, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
                     : null;
-            default -> null;
+            default -> workload(realm, clientId);
         };
         return Uni.createFrom().item(client);
+    }
+
+    /** A {@link FakeWorkloads} client, registered only in {@link #MACHINE_TENANT}. */
+    private static Client workload(RealmKey realm, String clientId) {
+        FakeWorkloads.Workload workload = FakeWorkloads.byClientId(clientId);
+        return workload != null && MACHINE_TENANT.equals(realm.tenant().value().toString())
+                ? new ConfidentialClient(workload.id(), realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.WORKLOAD_IDENTITY,
+                        Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
+                : null;
     }
 }
