@@ -121,7 +121,7 @@ There is no carry-over. A change that removes a capability removes it. Rows and 
 
 **What it leaves.** A thief holding all three can refresh silently until the token's absolute limit, because nothing like a reuse signal exists any more. D7 caps that limit. A client should keep its two keys apart, ideally in a key store that does not release them.
 
-**What it removes.** `consumeAndRotate`, `RefreshReuseDetection`, `RefreshDecision`, `RefreshTokenCodec.successorSecret`, `iam.refresh.reuse-grace`, the successor-key secret, and from `refresh_token_family` the columns `previous_token_hash`, `generation`, `rotated_at`, `rotation_salt` and `reused`. `revoked_at` becomes the only revocation flag, and readers of `reused` (`api/IntrospectService.java:110`) move to it. `iam.refresh.refresh-token-ttl` stays as an absolute limit (`rest/config/RefreshConfig.java:26`). Threat model row 2 and the RFC 9700 checklist's rotation row change with it.
+**What it removes.** `consumeAndRotate`, `RefreshReuseDetection`, `RefreshDecision`, `RefreshTokenCodec.successorSecret`, `iam.refresh.reuse-grace`, the successor-key secret, and from `refresh_token_family` the columns `previous_token_hash`, `generation`, `rotated_at`, `rotation_salt` and `reused`. `revoked_at` becomes the family's only revocation flag, and readers of `reused` (`api/IntrospectService.java:110`) move to it. `iam.refresh.refresh-token-ttl` stays as an absolute limit (`rest/config/RefreshConfig.java:26`). Threat model row 2 and the RFC 9700 checklist's rotation row change with it.
 
 **Consequences.**
 1. Concurrent refreshes from several instances of a client no longer race and no longer sign a user out, so client-side workarounds for that can go.
