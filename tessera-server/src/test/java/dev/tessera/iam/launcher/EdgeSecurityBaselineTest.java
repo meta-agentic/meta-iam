@@ -86,6 +86,19 @@ class EdgeSecurityBaselineTest {
     }
 
     @Test
+    @DisplayName("the sign-in page keeps a real Origin on its own post, and only that page does")
+    void signInPageReferrerPolicy() {
+        // Under no-referrer a browser posts the form with Origin: null, and CORS refuses it.
+        var page = given()
+                .header("X-Tenant-Id", java.util.UUID.randomUUID().toString())
+                .when()
+                .get("/signin");
+        assertThat(page.getHeaders().getValues("Referrer-Policy")).containsExactly("same-origin");
+        given().when().get("/signin-elsewhere").then().header("Referrer-Policy", equalTo("no-referrer"));
+        given().when().get("/q/health").then().header("Referrer-Policy", equalTo("no-referrer"));
+    }
+
+    @Test
     @DisplayName("a path that merely starts with /signin keeps the server-wide policy")
     void signInPrefixKeepsServerPolicy() {
         given()
