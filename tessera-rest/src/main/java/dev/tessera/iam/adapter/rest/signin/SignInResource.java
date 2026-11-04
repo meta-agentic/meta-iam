@@ -58,6 +58,13 @@ public class SignInResource {
 
     private static final String HTML = MediaType.TEXT_HTML + ";charset=UTF-8";
     private static final String SAME_ORIGIN = "same-origin";
+    /**
+     * Not the server-wide {@code no-referrer}: under that a browser posts this page's form with
+     * {@code Origin: null}, which the CORS filter refuses. This keeps the real origin on a post to
+     * tessera, and still sends nothing to another origin, so the transaction id in the page's URL
+     * does not leak on the redirect to the client.
+     */
+    private static final String REFERRER_POLICY = "same-origin";
 
     @Inject
     SignInUseCase signIn;
@@ -124,6 +131,7 @@ public class SignInResource {
                                     completed.sessionId().toString(), login.sessionTtl().toSeconds()),
                             SignInCookies.clear(uriInfo))
                     .header("Cache-Control", "no-store")
+                    .header("Referrer-Policy", REFERRER_POLICY)
                     .build();
             case SubmitResult.Denied denied -> form(Response.Status.UNAUTHORIZED, denied.form(), true);
             case SubmitResult.Unavailable unavailable -> unavailable(Response.Status.BAD_REQUEST);
@@ -155,6 +163,7 @@ public class SignInResource {
                 .type(HTML)
                 .entity(body)
                 .header("Content-Security-Policy", policy)
+                .header("Referrer-Policy", REFERRER_POLICY)
                 .header("Cache-Control", "no-store")
                 .build();
     }
