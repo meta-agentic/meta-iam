@@ -225,6 +225,7 @@ rather than behind an application gateway, and what that costs, is recorded in
 | `TESSERA_TRUST_CLIENT_CERTIFICATE_HEADER=false` (`iam.client-certificate.trust-header`) | **Security-critical.** Believe `X-Client-Certificate` only behind an edge that terminates mutual TLS and strips any client-supplied value. Ignored in single-tenant mode. |
 | `TESSERA_SIGN_IN_TTL=PT10M` (`iam.authflow.sign-in-ttl`) | How long an authorization request may wait on the sign-in page. |
 | `TESSERA_SIGNIN_THEMES_DIRECTORY` (`iam.signin.themes.directory`) | The directory holding sign-in page themes, read once at boot. Unset means no themes ([themes](docs/sign-in-themes.md)). |
+| `TESSERA_SIGNIN_THEMES_PUBLIC_KEY` (`iam.signin.themes.public-key`) | The P-256 public key, as a JWK, that theme manifests must verify under. Tessera refuses to start if a theme fails, or if themes exist with no key. |
 | `TESSERA_SIGNIN_THEMES_UNTHEMED=neutral` (`iam.signin.themes.unthemed`) | What a client gets when it names no theme, or one the directory lacks: `neutral` is tessera's own page, `refuse` shows no sign-in form. |
 | build with `-Dquarkus.profile=prod,singlenode` | For a deployment that runs exactly one instance: the in-process authorization-code and sign-in stores are used and no Infinispan server is needed. Run more than one instance and codes minted on one node cannot be redeemed on another, nor a sign-in started on one finished on another — use the default profile and a shared cache instead. |
 
