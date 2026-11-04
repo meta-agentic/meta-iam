@@ -3,6 +3,7 @@ package dev.tessera.iam.adapter.rest;
 
 import com.nimbusds.jwt.SignedJWT;
 import dev.tessera.iam.domain.authcode.AuthorizationError;
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import jakarta.ws.rs.core.Response;
 
 /**
@@ -18,6 +19,9 @@ import jakarta.ws.rs.core.Response;
  */
 sealed interface PresentedClientCredentials {
 
+    /** The challenge a {@code 401 invalid_client} carries after HTTP Basic (RFC 6749 §5.2). */
+    String BASIC_CHALLENGE = "Basic realm=\"tessera\"";
+
     /** The only client assertion type accepted (RFC 7523 §2.2). */
     String JWT_BEARER_ASSERTION = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -29,9 +33,20 @@ sealed interface PresentedClientCredentials {
      *                        {@code null} or blank, which each endpoint refuses
      * @param clientSecret    the presented secret, or {@code null}
      * @param clientAssertion the presented assertion, or {@code null}
+     * @param basic           whether the credential came in the {@code Authorization: Basic} header
      */
-    record Presented(String clientId, String clientSecret, String clientAssertion)
+    record Presented(String clientId, String clientSecret, String clientAssertion, boolean basic)
             implements PresentedClientCredentials {
+
+        /** How the request carried the secret. */
+        ClientSecretPresentation secretPresentation() {
+            return basic ? ClientSecretPresentation.BASIC : ClientSecretPresentation.POST;
+        }
+
+        /** What a {@code 401 invalid_client} answers with (RFC 6749 §5.2), or {@code null}. */
+        String challenge() {
+            return basic ? BASIC_CHALLENGE : null;
+        }
     }
 
     /** A presentation refused before any credential is checked. */
@@ -51,7 +66,7 @@ sealed interface PresentedClientCredentials {
         String resolvedClientId = basic != null ? basic.clientId() : clientId;
         String resolvedSecret = basic != null ? basic.clientSecret() : clientSecret;
         if (!assertionPresented(clientAssertionType, clientAssertion)) {
-            return new Presented(resolvedClientId, resolvedSecret, null);
+            return new Presented(resolvedClientId, resolvedSecret, null, basic != null);
         }
         // RFC 6749 §2.3: one authentication method per request.
         if (basic != null || clientSecret != null) {
@@ -66,7 +81,7 @@ sealed interface PresentedClientCredentials {
         if (isBlank(resolvedClientId)) {
             resolvedClientId = unverifiedSubject(clientAssertion);
         }
-        return new Presented(resolvedClientId, null, clientAssertion);
+        return new Presented(resolvedClientId, null, clientAssertion, false);
     }
 
     /** The assertion's {@code sub}, read before verification only to look the client up. */

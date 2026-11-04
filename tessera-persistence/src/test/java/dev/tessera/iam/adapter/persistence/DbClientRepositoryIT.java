@@ -362,6 +362,18 @@ class DbClientRepositoryIT {
 
     @Test
     @RunOnVertxContext
+    @DisplayName("a client id shaped like a user's sub is refused, so a client's token can never name a user")
+    void clientIdShapedLikeAUserSubIsRefused(UniAsserter asserter) {
+        UUID tenant = UUID.randomUUID();
+        OAuthClientEntity client = publicClient(tenant, UUID.randomUUID().toString(), "https://client.example/callback");
+
+        asserter.assertFailedWith(
+                () -> scoped(tenant, s -> s.persist(client).call(s::flush)),
+                failure -> Assertions.assertThat(failure).hasStackTraceContaining("shape of a user's sub"));
+    }
+
+    @Test
+    @RunOnVertxContext
     @DisplayName("a public client registers loopback http and a private-use scheme, but not plain http to a remote host")
     void publicClientRedirectUris(UniAsserter asserter) {
         UUID tenant = UUID.randomUUID();

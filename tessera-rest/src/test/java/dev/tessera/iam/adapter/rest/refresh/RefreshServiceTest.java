@@ -14,6 +14,7 @@ import dev.tessera.iam.domain.authcode.AuthorizationError;
 import dev.tessera.iam.domain.client.Client;
 import dev.tessera.iam.domain.client.ClientAuthMethod;
 import dev.tessera.iam.domain.client.ClientId;
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.client.ConfidentialClient;
 import dev.tessera.iam.domain.client.grant.AuthorizationCode;
 import dev.tessera.iam.domain.client.grant.GrantType;
@@ -29,6 +30,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,10 +58,12 @@ class RefreshServiceTest {
     private final InMemoryRefreshTokenStore store = new InMemoryRefreshTokenStore();
     private final AtomicInteger signerCalls = new AtomicInteger();
 
+    private ClientAuthMethod registeredMethod = ClientAuthMethod.CLIENT_SECRET;
+
     private final ClientRepositoryPort clients = (realm, clientId) -> Uni.createFrom().item(
             CONF_WIRE.equals(clientId)
                     ? new ConfidentialClient(CONF_ID, realm, CODE_AND_REFRESH,
-                            ClientAuthMethod.CLIENT_SECRET, Set.of("https://c/cb"))
+                            registeredMethod, Set.of("https://c/cb"))
                     : (Client) null);
 
     private final ClientSecretVerifierPort verifier =
@@ -95,6 +99,30 @@ class RefreshServiceTest {
                 RefreshTokenCodec.sha256(secret), null, 0, false, T0, T0.plusSeconds(3600));
         store.createFamily(fam).await().indefinitely();
         return RefreshTokenCodec.assemble(fid, secret);
+    }
+
+    @Test
+    @DisplayName("the right secret presented the wrong way, or to an mTLS client, is invalid_client; nothing is issued")
+    void registeredMethodIsEnforcedOnRefresh() {
+        for (var refused : Map.of(
+                ClientAuthMethod.CLIENT_SECRET_BASIC, ClientSecretPresentation.POST,
+                ClientAuthMethod.CLIENT_SECRET_POST, ClientSecretPresentation.BASIC,
+                ClientAuthMethod.MTLS, ClientSecretPresentation.BASIC).entrySet()) {
+            registeredMethod = refused.getKey();
+            String wire = seedFamily();
+            TokenResult result = service()
+                    .redeem(new RefreshCommand(REALM_A, wire, CONF_WIRE, CORRECT_SECRET, refused.getValue(), null))
+                    .await().indefinitely();
+            assertThat(result).as(refused.getKey().name()).isInstanceOfSatisfying(TokenResult.Failed.class,
+                    failed -> assertThat(failed.error()).isEqualTo(AuthorizationError.INVALID_CLIENT));
+        }
+        assertThat(signerCalls.get()).isZero();
+
+        registeredMethod = ClientAuthMethod.CLIENT_SECRET_BASIC;
+        String wire = seedFamily();
+        assertThat(service()
+                .redeem(new RefreshCommand(REALM_A, wire, CONF_WIRE, CORRECT_SECRET, ClientSecretPresentation.BASIC, null))
+                .await().indefinitely()).isInstanceOf(TokenResult.Issued.class);
     }
 
     @Test

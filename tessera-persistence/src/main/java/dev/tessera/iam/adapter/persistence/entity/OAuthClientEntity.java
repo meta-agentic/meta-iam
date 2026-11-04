@@ -16,6 +16,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Panache Reactive entity backing the {@code oauth_client} table.
@@ -35,6 +36,13 @@ import java.util.UUID;
 @Entity
 @Table(name = "oauth_client")
 public class OAuthClientEntity extends PanacheEntityBase {
+
+    /**
+     * A user's {@code sub} is a UUID tessera mints, and a {@code client_credentials} token's {@code sub}
+     * is the client id, so a client id of this shape is refused and the two namespaces never meet.
+     */
+    private static final Pattern USER_SUB_SHAPE =
+            Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
 
     /** Primary key (random v4). */
     @Id
@@ -139,6 +147,10 @@ public class OAuthClientEntity extends PanacheEntityBase {
     void checkRegistration() {
         if (id != null && ClientSecretVerifierPort.isReserved(id)) {
             throw new IllegalArgumentException("client id " + id + " is reserved and cannot be registered");
+        }
+        if (clientKey != null && USER_SUB_SHAPE.matcher(clientKey).matches()) {
+            throw new IllegalArgumentException("client id " + clientKey
+                    + " has the shape of a user's sub; a client_credentials token's sub could name a user");
         }
         requireRegistrable(redirectUris);
         requireRegistrable(postLogoutRedirectUris);

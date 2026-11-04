@@ -82,19 +82,20 @@ public class IntrospectResource {
 
         if (isBlank(credential.clientId())) {
             // No identifiable caller to authenticate — an invalid_client failure.
-            return Uni.createFrom().item(unauthorizedClient());
+            return Uni.createFrom().item(unauthorizedClient(credential.challenge()));
         }
 
         IntrospectCommand command = new IntrospectCommand(realm, token, tokenTypeHint,
-                credential.clientId(), credential.clientSecret(), credential.clientAssertion());
-        return introspect.introspect(command).map(IntrospectResource::render);
+                credential.clientId(), credential.clientSecret(), credential.secretPresentation(),
+                credential.clientAssertion());
+        return introspect.introspect(command).map(result -> render(result, credential.challenge()));
     }
 
-    private static Response render(IntrospectionResult result) {
+    private static Response render(IntrospectionResult result, String challenge) {
         return switch (result) {
             case IntrospectionResult.Active active -> ok(activeBody(active.token()));
             case IntrospectionResult.Inactive ignored -> ok(IntrospectionResponseDto.INACTIVE);
-            case IntrospectionResult.ClientAuthenticationFailed ignored -> unauthorizedClient();
+            case IntrospectionResult.ClientAuthenticationFailed ignored -> unauthorizedClient(challenge);
         };
     }
 
@@ -117,9 +118,12 @@ public class IntrospectResource {
                 .build();
     }
 
-    private static Response unauthorizedClient() {
-        return refusal(Response.Status.UNAUTHORIZED, AuthorizationError.INVALID_CLIENT,
-                "client authentication failed");
+    /** @param challenge the {@code WWW-Authenticate} value after HTTP Basic (RFC 6749 §5.2), or {@code null} */
+    private static Response unauthorizedClient(String challenge) {
+        return Response.fromResponse(refusal(Response.Status.UNAUTHORIZED, AuthorizationError.INVALID_CLIENT,
+                        "client authentication failed"))
+                .header("WWW-Authenticate", challenge)
+                .build();
     }
 
     private static Response refusal(Response.Status status, AuthorizationError error, String description) {

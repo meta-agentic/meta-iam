@@ -257,8 +257,9 @@ class ClientCredentialsServiceTest {
         assertThat(signed.get().claims()).containsEntry("cnf", Map.of("x5t#S256", "thumb"));
         assertFailed(issue(TENANT_A, "service", SECRET, null, List.of(), null, true),
                 AuthorizationError.INVALID_REQUEST);
+        // An mTLS client never authenticates by a secret, so it does not get as far as the binding.
         assertFailed(issue(TENANT_A, "mtls-auth", SECRET, null, List.of(), null, false),
-                AuthorizationError.INVALID_REQUEST);
+                AuthorizationError.INVALID_CLIENT);
     }
 
     @Test

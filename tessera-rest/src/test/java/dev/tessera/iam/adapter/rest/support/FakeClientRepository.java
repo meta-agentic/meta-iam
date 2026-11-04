@@ -66,6 +66,12 @@ public class FakeClientRepository implements ClientRepositoryPort {
     public static final ClientId CONFIDENTIAL_IDENTITY =
             new ClientId(UUID.fromString("00000000-0000-0000-0000-0000000000c0"));
 
+    /** Confidential clients holding {@link FakeClientSecretVerifier#CORRECT_SECRET}, each registered for one method. */
+    public static final String BASIC_ONLY_CLIENT_ID = "basic-only";
+    public static final String POST_ONLY_CLIENT_ID = "post-only";
+    /** An mTLS client with a secret hash stored against it, which must never authenticate by it. */
+    public static final String MTLS_WITH_SECRET_CLIENT_ID = "mtls-with-secret";
+
     private static final ClientId PUBLIC_IDENTITY =
             new ClientId(UUID.fromString("00000000-0000-0000-0000-0000000000a0"));
     private static final ClientId NO_CODE_IDENTITY =
@@ -108,9 +114,18 @@ public class FakeClientRepository implements ClientRepositoryPort {
                     ? new ConfidentialClient(KEYED_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
                             ClientAuthMethod.PRIVATE_KEY_JWT, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
                     : null;
+            case BASIC_ONLY_CLIENT_ID -> byMethod(realm, ClientAuthMethod.CLIENT_SECRET_BASIC);
+            case POST_ONLY_CLIENT_ID -> byMethod(realm, ClientAuthMethod.CLIENT_SECRET_POST);
+            case MTLS_WITH_SECRET_CLIENT_ID -> byMethod(realm, ClientAuthMethod.MTLS);
             default -> workload(realm, clientId);
         };
         return Uni.createFrom().item(client);
+    }
+
+    private static Client byMethod(RealmKey realm, ClientAuthMethod method) {
+        return new ConfidentialClient(CONFIDENTIAL_IDENTITY, realm,
+                Set.of(new AuthorizationCode(), new ClientCredentials(), new RefreshToken()), method, REDIRECTS,
+                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES);
     }
 
     /** A {@link FakeWorkloads} client, registered only in {@link #MACHINE_TENANT}. */

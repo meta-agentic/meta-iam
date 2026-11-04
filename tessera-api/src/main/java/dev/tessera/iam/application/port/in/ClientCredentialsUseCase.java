@@ -1,6 +1,7 @@
 package dev.tessera.iam.application.port.in;
 
 import dev.tessera.iam.application.port.in.TokenUseCase.TokenResult;
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import io.smallrye.mutiny.Uni;
 import java.util.List;
@@ -25,6 +26,7 @@ public interface ClientCredentialsUseCase {
      * @param realm          the realm the request runs within (never {@code null})
      * @param clientId       the wire {@code client_id} (never {@code null} or blank)
      * @param clientSecret   the presented client secret, or {@code null}
+     * @param secretPresentation how the request carried the secret
      * @param clientAssertion the presented JWT client assertion (RFC 7523 §2.2), or {@code null};
      *                       when present the client authenticates with it, never with a secret
      * @param scope          the requested {@code scope}, space-delimited, or {@code null} for the
@@ -38,15 +40,23 @@ public interface ClientCredentialsUseCase {
             RealmKey realm,
             String clientId,
             String clientSecret,
+            ClientSecretPresentation secretPresentation,
             String clientAssertion,
             String scope,
             List<String> resources,
             String certThumbprint) {
 
-        /** A request authenticated by a client secret. */
+        /** A request authenticated by a client secret in the body. */
         public ClientCredentialsCommand(RealmKey realm, String clientId, String clientSecret, String scope,
                 List<String> resources, String certThumbprint) {
-            this(realm, clientId, clientSecret, null, scope, resources, certThumbprint);
+            this(realm, clientId, clientSecret, ClientSecretPresentation.POST, null, scope, resources, certThumbprint);
+        }
+
+        /** A request authenticated by a client secret in the body, or by an assertion. */
+        public ClientCredentialsCommand(RealmKey realm, String clientId, String clientSecret, String clientAssertion,
+                String scope, List<String> resources, String certThumbprint) {
+            this(realm, clientId, clientSecret, ClientSecretPresentation.POST, clientAssertion, scope, resources,
+                    certThumbprint);
         }
 
         public ClientCredentialsCommand {

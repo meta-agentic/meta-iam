@@ -153,7 +153,11 @@ public class FirstBootProvisioner {
                     entity.baselineId = realm.baseline().value();
                     entity.clientKey = id.get();
                     entity.clientType = ClientType.CONFIDENTIAL;
-                    entity.authMethod = "CLIENT_SECRET";
+                    if (!cfg.authMethod().holdsSecret()) {
+                        throw new IllegalStateException(
+                                "iam.bootstrap.client.auth-method must be a secret method: first boot stores a secret");
+                    }
+                    entity.authMethod = cfg.authMethod().name();
                     entity.secretHash = hash(secret);
                     entity.allowedGrants = String.join(",", cfg.grants());
                     entity.redirectUris = cfg.redirectUris()

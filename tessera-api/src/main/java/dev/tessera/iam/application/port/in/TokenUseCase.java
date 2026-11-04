@@ -1,5 +1,6 @@
 package dev.tessera.iam.application.port.in;
 
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import io.smallrye.mutiny.Uni;
 import dev.tessera.iam.domain.authcode.AuthorizationError;
 import dev.tessera.iam.domain.tenancy.RealmKey;
@@ -44,6 +45,7 @@ public interface TokenUseCase {
      *                     client certificate the gateway asserted for this request, computed
      *                     at the edge, or {@code null} when none was presented. Required for a
      *                     confidential client (its mTLS sender-constraining binding, RFC 8705).
+     * @param secretPresentation how the request carried {@code clientSecret}.
      */
     record TokenRequestCommand(
             RealmKey realm,
@@ -53,7 +55,15 @@ public interface TokenUseCase {
             String clientSecret,
             String codeVerifier,
             String dpopProof,
-            String certThumbprint) {
+            String certThumbprint,
+            ClientSecretPresentation secretPresentation) {
+
+        /** A request whose secret, if any, came in the body. */
+        public TokenRequestCommand(RealmKey realm, String code, String redirectUri, String clientId,
+                String clientSecret, String codeVerifier, String dpopProof, String certThumbprint) {
+            this(realm, code, redirectUri, clientId, clientSecret, codeVerifier, dpopProof, certThumbprint,
+                    ClientSecretPresentation.POST);
+        }
 
         public TokenRequestCommand {
             if (realm == null) {

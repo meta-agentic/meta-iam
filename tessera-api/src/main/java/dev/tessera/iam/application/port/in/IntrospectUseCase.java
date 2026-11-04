@@ -1,5 +1,6 @@
 package dev.tessera.iam.application.port.in;
 
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import io.smallrye.mutiny.Uni;
 
@@ -53,12 +54,19 @@ public interface IntrospectUseCase {
             String tokenTypeHint,
             String clientId,
             String clientSecret,
+            ClientSecretPresentation secretPresentation,
             String clientAssertion) {
 
-        /** A request authenticated by a secret, or by the {@code client_id} alone. */
+        /** A request authenticated by a secret in the body, or by the {@code client_id} alone. */
         public IntrospectCommand(
                 RealmKey realm, String token, String tokenTypeHint, String clientId, String clientSecret) {
-            this(realm, token, tokenTypeHint, clientId, clientSecret, null);
+            this(realm, token, tokenTypeHint, clientId, clientSecret, ClientSecretPresentation.POST, null);
+        }
+
+        /** A request authenticated by a secret in the body, or by an assertion. */
+        public IntrospectCommand(RealmKey realm, String token, String tokenTypeHint, String clientId,
+                String clientSecret, String clientAssertion) {
+            this(realm, token, tokenTypeHint, clientId, clientSecret, ClientSecretPresentation.POST, clientAssertion);
         }
 
         public IntrospectCommand {
