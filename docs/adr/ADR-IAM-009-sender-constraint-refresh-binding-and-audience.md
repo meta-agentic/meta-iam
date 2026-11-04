@@ -62,10 +62,10 @@ Every client authentication by mode by grant. `Certificate` means a certificate 
 | 2 | `private_key_jwt` | `mtls` | Assertion and certificate; `cnf["x5t#S256"]`; `Bearer` | Assertion and the grant's certificate | The same thumbprint | A1 / A2 |
 | 3 | mTLS | `mtls` | Refused, `invalid_client`, until certificate matching is built. Then the certificate authenticates and binds | Refused until then. Its rule is written with certificate matching | The same thumbprint | A1 / A2 |
 | 4 | mTLS | `dpop` | Refused at write and by a `CHECK` | never reached | never minted | none |
-| 5 | Workload identity | either | Refused, `invalid_client`: this method is `client_credentials` only (ADR-IAM-010 D3) | Refused | never minted | none |
+| 5 | Workload identity | either | Refused at `/par` and here, `invalid_client`. This client acts for itself: `client_credentials`, and token exchange under ADR-IAM-007 D1's stricter rule (ADR-IAM-010 D3) | Refused: it holds no refresh token | never minted on these grants | none |
 | 6 | Secret, until ADR-IAM-010 D3 removes it | either | As rows 1 and 2, with the secret in place of the assertion | The same | The same | A1 / A2 |
 
-`client_credentials` follows the same modes through the same function. It has no refresh token. Its audiences stay `oauth_client.audiences`, and it now names one of them, by A1's choice: today a request with no `resource` gets them all (`api/ClientCredentialsService.java:146-148`). Clients registered as agents, or for the exchange grant, follow these rows; ADR-IAM-007's extra requirements on them still apply.
+`client_credentials` follows the same modes through the same function. It has no refresh token. Its audiences stay `oauth_client.audiences`, and it now names one of them, by A1's choice: today a request with no `resource` gets them all (`api/ClientCredentialsService.java:146-148`). Clients registered as agents, or for the exchange grant, follow these rows by how they authenticate; ADR-IAM-007's extra requirements on them still apply.
 
 Failures, none of which change the grant:
 - **Code grant.** A missing or invalid proof is `invalid_dpop_proof`. A missing certificate is `invalid_request`. Both are today's answers. A proof that does not match the request's `dpop_jkt` is `invalid_dpop_proof` (RFC 9449 §10 requires the refusal and names no error).
@@ -95,7 +95,7 @@ Failures, none of which change the grant:
 **The order on the refresh path.**
 1. Take the realm from the request, as every other token path does, and authenticate the client: failure is `invalid_client`. No token lookup comes first, so an unknown token and a known one cannot answer differently here.
 2. Validate the proof the client's mode requires. This depends on nothing about the token, so it reveals nothing.
-3. Load the family and compare the token's secret with its stored hash in constant time. An unknown, expired or revoked token, a wrong secret, or a token issued to another client is `invalid_grant`.
+3. Load the family and compare the token's secret with its stored hash in constant time. An unknown, expired or revoked token, a wrong secret, a token issued to another client, or a family created before the client's `grants_valid_after` (D5) is `invalid_grant`.
 4. Check the binding: the family's method and thumbprint against what was presented. If the client's mode has changed since (D5), the family's method still decides, and a proof step 2 did not validate is validated here. An invalid one is `invalid_grant`.
 5. Only then check the audience (D3) and the scope. A holder who has not proved the binding learns nothing from `invalid_target` or `invalid_scope`.
 6. Mint. Nothing about the family is written on a refresh, so concurrent refreshes cannot conflict.
@@ -157,10 +157,10 @@ ADR-IAM-003 D4b is ratified, without its transition:
 
 **Decision.** Nothing carries over. Old instances are drained first, then one migration runs. Like V14 it lifts row-level security inside its own transaction, because it crosses every tenant:
 - Adds `sender_constraint`, setting `mtls` on a client that authenticates by mTLS and `dpop` on every other client, then makes it not null. `dpop` is the strictest value usable on every deployment, and a client that cannot prove it fails closed.
-- Adds `user_audiences`, not null, empty, and a nullable `resource_identifier`.
+- Adds `user_audiences`, not null, empty, and a nullable `resource_identifier` and `grants_valid_after`.
 - Deletes every refresh token family, then adds the not-null `binding_method`, `binding_thumbprint` and `granted_resources`, makes `granted_scope` not null, and drops the columns ADR-IAM-010 D6 names. A `CHECK` limits `binding_method` to `dpop` and `mtls`.
 - Drops `refresh_family_directory`, with `RefreshTokenTenantResolverPort`: it existed so a replayed token could be traced to its realm, and there is no replay signal any more.
-- Adds the history table of D5.
+- Adds the history table of D5, and where D5 stores the highest declaration revision applied.
 
 An authorization code in flight that decodes with no resources is refused.
 
