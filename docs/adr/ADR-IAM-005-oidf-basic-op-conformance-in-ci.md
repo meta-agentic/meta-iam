@@ -5,7 +5,7 @@
 | Status | **Accepted** |
 | Date | 2026-09-11 |
 | Ratified | 2026-10-19 |
-| Relates to | D1 amended by [ADR-IAM-010](ADR-IAM-010-fapi-2-security-profile-baseline.md) D8, once accepted; [ADR-IAM-002](ADR-IAM-002-standalone-public-origin.md) (fixed-tenant mode), [ADR-IAM-004](ADR-IAM-004-end-user-session-and-consent.md) (session and consent) |
+| Relates to | [ADR-IAM-002](ADR-IAM-002-standalone-public-origin.md) (fixed-tenant mode), [ADR-IAM-004](ADR-IAM-004-end-user-session-and-consent.md) (session and consent) |
 
 ---
 
