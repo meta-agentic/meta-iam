@@ -4,7 +4,7 @@
 |---|---|
 | Status | **Proposed** |
 | Date | 2026-11-04 |
-| Relates to | [ADR-IAM-003](ADR-IAM-003-tenant-tier-and-path-scoped-issuer.md) (where a tenant's settings live; one issuer and discovery document per realm), [ADR-IAM-004](ADR-IAM-004-end-user-session-and-consent.md) (MFA, D8), [ADR-IAM-005](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) (conformance, D7), [ADR-IAM-006](ADR-IAM-006-standalone-provider-for-many-sites-and-agents.md) (amended by D1), [ADR-IAM-007](ADR-IAM-007-token-exchange-and-agent-delegation-profile.md) (the rule for configuration points, followed by D2), [ADR-IAM-009](ADR-IAM-009-sender-constraint-refresh-binding-and-audience.md) (the token rules for each profile) |
+| Relates to | [ADR-IAM-003](ADR-IAM-003-tenant-tier-and-path-scoped-issuer.md) (where a tenant's settings live; one issuer and discovery document per realm), [ADR-IAM-004](ADR-IAM-004-end-user-session-and-consent.md) (MFA; see this record's D8), [ADR-IAM-005](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) (conformance; see this record's D7), [ADR-IAM-006](ADR-IAM-006-standalone-provider-for-many-sites-and-agents.md) (amended by this record's D1), [ADR-IAM-007](ADR-IAM-007-token-exchange-and-agent-delegation-profile.md) (the rule for configuration points, followed by this record's D2), [ADR-IAM-009](ADR-IAM-009-sender-constraint-refresh-binding-and-audience.md) (the token rules for each profile) |
 
 ---
 
@@ -164,7 +164,7 @@ Limits under `fapi2` apply as the lower of the configured value and the limit, b
 
 **Decision.**
 - **Startup fails, on every profile,** on: a code lifetime above 60 seconds; an `iat`/`nbf` tolerance outside 10 to 60 seconds; a `request_uri` lifetime of 600 seconds or more; an access-token lifetime above one hour; a refresh-token limit above 90 days; a DPoP `proof-max-age` above five minutes; an assertion `max-lifetime` above one hour; a `sign-in-ttl` above one hour; a reuse grace above one minute. ADR-IAM-007 already lists missing bounds as work to do, and these values are shared by every tenant in a deployment.
-- A proof's or an assertion's `iat` and `nbf` are accepted up to 10 seconds ahead, on every profile.
+- A proof's or an assertion's `iat` and `nbf` are accepted at least 10 seconds ahead, up to the configured tolerance, on every profile.
 - Under `fapi2`, a `private_key_jwt` assertion must use `ES256` or `PS256` with `aud` as a string, except D3's workload assertions.
 - A `client_credentials` token names one audience, under ADR-IAM-009's rule A1.
 - `/authorize`'s redirect becomes a 303. Discovery gains `authorization_response_iss_parameter_supported` (RFC 9207), and `tls_client_certificate_bound_access_tokens` becomes true only while certificates are believed; today it is always true (`dom/oidc/OidcCapabilities.java`).
