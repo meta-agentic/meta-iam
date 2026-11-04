@@ -79,18 +79,19 @@ public class RevokeResource {
 
         if (isBlank(credential.clientId())) {
             // No identifiable caller to authenticate — an invalid_client failure.
-            return Uni.createFrom().item(unauthorizedClient());
+            return Uni.createFrom().item(unauthorizedClient(credential.challenge()));
         }
 
         RevokeCommand command = new RevokeCommand(realm, token, tokenTypeHint,
-                credential.clientId(), credential.clientSecret(), credential.clientAssertion());
-        return revoke.revoke(command).map(RevokeResource::render);
+                credential.clientId(), credential.clientSecret(), credential.secretPresentation(),
+                credential.clientAssertion());
+        return revoke.revoke(command).map(result -> render(result, credential.challenge()));
     }
 
-    private static Response render(RevokeResult result) {
+    private static Response render(RevokeResult result, String challenge) {
         return switch (result) {
             case RevokeResult.Done ignored -> success();
-            case RevokeResult.ClientAuthenticationFailed ignored -> unauthorizedClient();
+            case RevokeResult.ClientAuthenticationFailed ignored -> unauthorizedClient(challenge);
         };
     }
 
@@ -102,9 +103,12 @@ public class RevokeResource {
                 .build();
     }
 
-    private static Response unauthorizedClient() {
-        return refusal(Response.Status.UNAUTHORIZED, AuthorizationError.INVALID_CLIENT,
-                "client authentication failed");
+    /** @param challenge the {@code WWW-Authenticate} value after HTTP Basic (RFC 6749 §5.2), or {@code null} */
+    private static Response unauthorizedClient(String challenge) {
+        return Response.fromResponse(refusal(Response.Status.UNAUTHORIZED, AuthorizationError.INVALID_CLIENT,
+                        "client authentication failed"))
+                .header("WWW-Authenticate", challenge)
+                .build();
     }
 
     private static Response refusal(Response.Status status, AuthorizationError error, String description) {

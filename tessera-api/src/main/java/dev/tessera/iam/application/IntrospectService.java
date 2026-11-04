@@ -83,7 +83,7 @@ public final class IntrospectService implements IntrospectUseCase {
         return clients.findByClientId(command.realm(), command.clientId())
                 .flatMap(client -> ClientAuthentication.authenticate(secretVerifier, keySource,
                                 assertionVerifier, ReplayBudget.INTROSPECTION_AND_REVOCATION, command.realm(), command.clientId(), client,
-                                command.clientSecret(), command.clientAssertion(), false)
+                                command.clientSecret(), command.secretPresentation(), command.clientAssertion(), false)
                         .flatMap(ok -> ok ? classify(command) : authFailed()));
     }
 

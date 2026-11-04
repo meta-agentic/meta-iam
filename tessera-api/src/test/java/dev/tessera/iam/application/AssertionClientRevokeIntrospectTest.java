@@ -64,7 +64,7 @@ class AssertionClientRevokeIntrospectTest {
     private final Map<String, Client> registry = Map.of(
             "keyed", confidential(KEYED, ClientAuthMethod.PRIVATE_KEY_JWT),
             "workload", confidential(WORKLOAD, ClientAuthMethod.WORKLOAD_IDENTITY),
-            "secret-client", confidential(SECRET_CLIENT, ClientAuthMethod.CLIENT_SECRET),
+            "secret-client", confidential(SECRET_CLIENT, ClientAuthMethod.CLIENT_SECRET_POST),
             "spa", new PublicClient(new ClientId(UUID.randomUUID()), REALM, Set.of(new AuthorizationCode()), Set.of()));
 
     private final ClientRepositoryPort clients = (realm, clientId) ->

@@ -24,6 +24,28 @@ public enum ClientAuthMethod {
      */
     WORKLOAD_IDENTITY,
 
-    /** Shared {@code client_secret} (basic/post) — the weakest accepted method. */
-    CLIENT_SECRET
+    /** Shared secret in the {@code Authorization} header ({@code client_secret_basic}). */
+    CLIENT_SECRET_BASIC,
+
+    /** Shared secret in the form body ({@code client_secret_post}). */
+    CLIENT_SECRET_POST;
+
+    /** Whether a client registered for this method holds a shared secret at all. */
+    public boolean holdsSecret() {
+        return this == CLIENT_SECRET_BASIC || this == CLIENT_SECRET_POST;
+    }
+
+    /**
+     * Whether a secret presented this way can authenticate a client registered for this method.
+     *
+     * @param presentation how the request carried the secret
+     * @return {@code false} for every method that holds no secret, whatever the presentation
+     */
+    public boolean acceptsSecret(ClientSecretPresentation presentation) {
+        return switch (this) {
+            case CLIENT_SECRET_BASIC -> presentation == ClientSecretPresentation.BASIC;
+            case CLIENT_SECRET_POST -> presentation == ClientSecretPresentation.POST;
+            case MTLS, PRIVATE_KEY_JWT, WORKLOAD_IDENTITY -> false;
+        };
+    }
 }

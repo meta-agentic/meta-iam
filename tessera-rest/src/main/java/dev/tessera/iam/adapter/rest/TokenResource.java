@@ -8,6 +8,8 @@ import dev.tessera.iam.adapter.rest.ratelimit.RateLimited;
 import dev.tessera.iam.adapter.rest.tenancy.TenantContext;
 import dev.tessera.iam.adapter.rest.tenancy.TenantScoped;
 import dev.tessera.iam.adapter.rest.token.ClientCertificateThumbprint;
+import dev.tessera.iam.adapter.rest.token.TrustedClientCertificate;
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.application.port.in.ClientCredentialsUseCase;
 import dev.tessera.iam.application.port.in.ClientCredentialsUseCase.ClientCredentialsCommand;
 import dev.tessera.iam.application.port.in.RefreshUseCase;
@@ -78,6 +80,9 @@ public class TokenResource {
     @Inject
     TenantContext tenantContext;
 
+    @Inject
+    TrustedClientCertificate clientCertificates;
+
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
@@ -103,11 +108,15 @@ public class TokenResource {
         RealmKey realm = tenantContext.realm();
 
         // HTTP Basic client authentication takes precedence over body params (RFC 6749
-        // §2.3.1 recommends Basic). A confidential client may present its credential either
-        // way; a public client presents neither and relies on PKCE (or refresh possession).
+        // §2.3.1 recommends Basic). Which way a confidential client may present its credential
+        // is decided by its registration; a public client presents neither and relies on PKCE
+        // (or refresh possession).
         BasicCredentials basic = BasicCredentials.parse(authorization);
         String resolvedClientId = basic != null ? basic.clientId() : clientId;
         String resolvedSecret = basic != null ? basic.clientSecret() : clientSecret;
+        ClientSecretPresentation presentation =
+                basic != null ? ClientSecretPresentation.BASIC : ClientSecretPresentation.POST;
+        String challenge = basic != null ? PresentedClientCredentials.BASIC_CHALLENGE : null;
         boolean assertionPresented =
                 PresentedClientCredentials.assertionPresented(clientAssertionType, clientAssertion);
         if (assertionPresented && !GRANT_CLIENT_CREDENTIALS.equals(grantType)) {
@@ -124,12 +133,11 @@ public class TokenResource {
             // Sender-constraining material: the DPoP proof (public client) is passed opaque to
             // the use case's validator; the mTLS certificate thumbprint (confidential client) is
             // computed here at the edge from the gateway-asserted certificate.
-            String certThumbprint =
-                    ClientCertificateThumbprint.fromHeader(clientCertificate).orElse(null);
+            String certThumbprint = clientCertificates.thumbprint(clientCertificate);
             TokenRequestCommand command = new TokenRequestCommand(
                     realm, code, redirectUri, resolvedClientId, resolvedSecret, codeVerifier,
-                    dpopProof, certThumbprint);
-            return token.redeemAuthorizationCode(command).map(TokenResource::render);
+                    dpopProof, certThumbprint, presentation);
+            return token.redeemAuthorizationCode(command).map(result -> render(result, challenge));
         }
 
         if (GRANT_REFRESH_TOKEN.equals(grantType)) {
@@ -138,8 +146,8 @@ public class TokenResource {
                         "refresh_token and client_id are required");
             }
             RefreshCommand command = new RefreshCommand(
-                    realm, refreshToken, resolvedClientId, resolvedSecret, scope);
-            return refresh.redeem(command).map(TokenResource::render);
+                    realm, refreshToken, resolvedClientId, resolvedSecret, presentation, scope);
+            return refresh.redeem(command).map(result -> render(result, challenge));
         }
 
         if (GRANT_CLIENT_CREDENTIALS.equals(grantType) && clientCredentialsConfig.enabled()) {
@@ -150,14 +158,13 @@ public class TokenResource {
             }
             PresentedClientCredentials.Presented credential = (PresentedClientCredentials.Presented) presented;
             if (isBlank(credential.clientId())) {
-                return error(Response.Status.UNAUTHORIZED, AuthorizationError.INVALID_CLIENT,
-                        "client authentication is required");
+                return Uni.createFrom().item(errorBody(Response.Status.UNAUTHORIZED, AuthorizationError.INVALID_CLIENT,
+                        "client authentication is required", credential.challenge()));
             }
             ClientCredentialsCommand command = new ClientCredentialsCommand(
-                    realm, credential.clientId(), credential.clientSecret(), credential.clientAssertion(), scope,
-                    resources,
-                    ClientCertificateThumbprint.fromHeader(clientCertificate).orElse(null));
-            return clientCredentials.issue(command).map(TokenResource::render);
+                    realm, credential.clientId(), credential.clientSecret(), credential.secretPresentation(),
+                    credential.clientAssertion(), scope, resources, clientCertificates.thumbprint(clientCertificate));
+            return clientCredentials.issue(command).map(result -> render(result, credential.challenge()));
         }
 
         return error(Response.Status.BAD_REQUEST,
@@ -165,14 +172,15 @@ public class TokenResource {
                 "grant_type is not supported");
     }
 
-    private static Response render(TokenResult result) {
+    private static Response render(TokenResult result, String challenge) {
         return switch (result) {
             case TokenResult.Issued issued -> success(issued);
             case TokenResult.Failed failed -> {
                 Response.Status status = failed.error() == AuthorizationError.INVALID_CLIENT
                         ? Response.Status.UNAUTHORIZED
                         : Response.Status.BAD_REQUEST;
-                yield errorBody(status, failed.error(), failed.description());
+                yield errorBody(status, failed.error(), failed.description(),
+                        failed.error() == AuthorizationError.INVALID_CLIENT ? challenge : null);
             }
         };
     }
@@ -194,16 +202,18 @@ public class TokenResource {
 
     private static Uni<Response> error(
             Response.Status status, AuthorizationError error, String description) {
-        return Uni.createFrom().item(errorBody(status, error, description));
+        return Uni.createFrom().item(errorBody(status, error, description, null));
     }
 
+    /** @param challenge the {@code WWW-Authenticate} value after HTTP Basic (RFC 6749 §5.2), or {@code null} */
     private static Response errorBody(
-            Response.Status status, AuthorizationError error, String description) {
+            Response.Status status, AuthorizationError error, String description, String challenge) {
         Response.ResponseBuilder builder = Response.status(status)
                 .type(MediaType.APPLICATION_JSON)
                 .entity(new OAuthErrorDto(error.code(), description))
                 .header("Cache-Control", "no-store")
-                .header("Pragma", "no-cache");
+                .header("Pragma", "no-cache")
+                .header("WWW-Authenticate", challenge);
         // RFC 9449 §5: signal DPoP (and the accepted algorithms) when a public client's proof
         // was missing or invalid, so the client knows to retry with a proof.
         if (error == AuthorizationError.INVALID_DPOP_PROOF) {

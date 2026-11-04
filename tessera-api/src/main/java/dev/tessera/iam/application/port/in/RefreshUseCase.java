@@ -1,6 +1,7 @@
 package dev.tessera.iam.application.port.in;
 
 import dev.tessera.iam.application.port.in.TokenUseCase.TokenResult;
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import io.smallrye.mutiny.Uni;
 
@@ -41,7 +42,14 @@ public interface RefreshUseCase {
             String refreshToken,
             String clientId,
             String clientSecret,
+            ClientSecretPresentation secretPresentation,
             String scope) {
+
+        /** A request whose secret, if any, came in the body. */
+        public RefreshCommand(
+                RealmKey requestRealm, String refreshToken, String clientId, String clientSecret, String scope) {
+            this(requestRealm, refreshToken, clientId, clientSecret, ClientSecretPresentation.POST, scope);
+        }
 
         public RefreshCommand {
             if (requestRealm == null) {

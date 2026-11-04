@@ -7,6 +7,7 @@ import dev.tessera.iam.application.port.out.ClientSecretVerifierPort;
 import dev.tessera.iam.domain.client.Client;
 import dev.tessera.iam.domain.client.ClientAuthMethod;
 import dev.tessera.iam.domain.client.ClientId;
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.client.ConfidentialClient;
 import dev.tessera.iam.domain.client.PublicClient;
 import dev.tessera.iam.domain.tenancy.RealmKey;
@@ -28,9 +29,11 @@ import io.smallrye.mutiny.Uni;
  * secret was presented. So neither the response time nor the failure throttle tells whether a
  * {@code client_id} exists.
  *
- * <p>A client authenticates with the one method it is registered for. A {@code private_key_jwt}
- * or workload-identity client has no secret, so its secret is verified against the sentinel and
- * fails; a client presenting a JWT assertion ({@link #authenticateAssertion}) is accepted only when
+ * <p>A client authenticates with the one method it is registered for. A client holding no secret
+ * ({@code private_key_jwt}, workload identity, mTLS) has its secret verified against the sentinel,
+ * and fails even if a secret hash is stored for it. A client holding a secret fails if the secret
+ * came the wrong way ({@code client_secret_basic} against {@code client_secret_post}), after the
+ * same one verification. A client presenting a JWT assertion ({@link #authenticateAssertion}) is accepted only when
  * it is registered for one of those two assertion methods, and the assertion path runs the same
  * steps for every other client too.
  */
@@ -45,21 +48,24 @@ final class ClientAuthentication {
      * allowed its {@code client_id} alone. A public client presenting an assertion is refused.
      *
      * @param budget             the replay budget a presented assertion's {@code jti} counts against
+     * @param presentation       how the request carried {@code presentedSecret}
      * @param presentedAssertion the presented {@code client_assertion}, or {@code null}
      */
     static Uni<Boolean> authenticate(
             ClientSecretVerifierPort secrets, ClientKeySourcePort keys, ClientAssertionVerifierPort assertions,
             ReplayBudget budget, RealmKey realm, String presentedClientId, Client client, String presentedSecret,
-            String presentedAssertion, boolean publicClientsAllowed) {
+            ClientSecretPresentation presentation, String presentedAssertion, boolean publicClientsAllowed) {
         if (presentedAssertion != null) {
             return authenticateAssertion(keys, assertions, budget, realm, presentedClientId, client,
                     presentedAssertion);
         }
-        return authenticate(secrets, realm, presentedClientId, client, presentedSecret, publicClientsAllowed);
+        return authenticate(secrets, realm, presentedClientId, client, presentedSecret, presentation,
+                publicClientsAllowed);
     }
 
     /**
      * @param client               the client the realm resolved for the presented id, or {@code null}
+     * @param presentation         how the request carried {@code presentedSecret}
      * @param publicClientsAllowed whether a public client is identified by its {@code client_id}
      *                             alone, as revocation allows for the tokens issued to it
      *                             (RFC 7009 §2.1); introspection and {@code client_credentials}
@@ -68,13 +74,14 @@ final class ClientAuthentication {
      */
     static Uni<Boolean> authenticate(
             ClientSecretVerifierPort verifier, RealmKey realm, String presentedClientId, Client client,
-            String presentedSecret, boolean publicClientsAllowed) {
-        boolean confidential = client instanceof ConfidentialClient c && !byAssertion(c);
+            String presentedSecret, ClientSecretPresentation presentation, boolean publicClientsAllowed) {
+        boolean confidential = client instanceof ConfidentialClient c && c.authMethod().holdsSecret();
         String secret = presentedSecret == null ? "" : presentedSecret;
         return verifier.verifySecret(realm,
                         confidential ? client.id() : ClientSecretVerifierPort.unknownClient(presentedClientId), secret)
                 .map(verified -> confidential
                         ? Boolean.TRUE.equals(verified)
+                                && ((ConfidentialClient) client).authMethod().acceptsSecret(presentation)
                         : publicClientsAllowed && client instanceof PublicClient);
     }
 

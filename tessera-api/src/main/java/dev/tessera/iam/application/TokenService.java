@@ -189,8 +189,11 @@ public final class TokenService implements TokenUseCase {
                 if (command.clientSecret() == null || command.clientSecret().isBlank()) {
                     yield Uni.createFrom().item(Boolean.FALSE);
                 }
-                yield secretVerifier.verifySecret(
-                        command.realm(), confidential.id(), command.clientSecret());
+                // The registered method decides, after the same verification: an mTLS or assertion
+                // client never authenticates by a secret, and basic and post are not interchangeable.
+                yield secretVerifier.verifySecret(command.realm(), confidential.id(), command.clientSecret())
+                        .map(verified -> Boolean.TRUE.equals(verified)
+                                && confidential.authMethod().acceptsSecret(command.secretPresentation()));
             }
         };
     }

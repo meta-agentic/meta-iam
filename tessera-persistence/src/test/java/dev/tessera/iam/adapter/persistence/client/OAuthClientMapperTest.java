@@ -35,13 +35,13 @@ class OAuthClientMapperTest {
     @Test
     @DisplayName("confidential entity maps to a ConfidentialClient with its auth method and grants")
     void mapsConfidential() {
-        OAuthClientEntity e = entity(ClientType.CONFIDENTIAL, "CLIENT_SECRET",
+        OAuthClientEntity e = entity(ClientType.CONFIDENTIAL, "CLIENT_SECRET_BASIC",
                 "authorization_code,refresh_token");
         Client client = OAuthClientMapper.toDomain(e);
         assertThat(client).isInstanceOfSatisfying(ConfidentialClient.class, c -> {
             assertThat(c.id().value()).isEqualTo(e.id);
             assertThat(c.realm().tenant().value()).isEqualTo(e.tenantId);
-            assertThat(c.authMethod()).isEqualTo(ClientAuthMethod.CLIENT_SECRET);
+            assertThat(c.authMethod()).isEqualTo(ClientAuthMethod.CLIENT_SECRET_BASIC);
             assertThat(c.allowedGrants())
                     .containsExactlyInAnyOrder(new AuthorizationCode(), new RefreshToken());
         });
@@ -57,7 +57,7 @@ class OAuthClientMapperTest {
     @Test
     @DisplayName("the sign-in theme maps for both kinds, and is absent when the row names none")
     void mapsSignInTheme() {
-        OAuthClientEntity confidential = entity(ClientType.CONFIDENTIAL, "CLIENT_SECRET", "authorization_code");
+        OAuthClientEntity confidential = entity(ClientType.CONFIDENTIAL, "CLIENT_SECRET_BASIC", "authorization_code");
         confidential.signInTheme = "acme";
         OAuthClientEntity pub = entity(ClientType.PUBLIC, null, "authorization_code");
         pub.signInTheme = "zenith";

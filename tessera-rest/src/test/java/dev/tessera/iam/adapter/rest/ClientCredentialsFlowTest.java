@@ -78,9 +78,10 @@ class ClientCredentialsFlowTest extends AuthorizationCodeFlowSupport {
     }
 
     @Test
-    @DisplayName("client_secret_post authenticates the same client")
+    @DisplayName("client_secret_post authenticates a client registered for it")
     void issuesATokenWithPostAuthentication() {
-        request(MACHINE_TENANT).formParam("client_id", CLIENT).formParam("client_secret", SECRET)
+        request(MACHINE_TENANT)
+                .formParam("client_id", FakeClientRepository.POST_ONLY_CLIENT_ID).formParam("client_secret", SECRET)
                 .when().post("/token")
                 .then().statusCode(200).body("access_token", Matchers.notNullValue());
     }
@@ -122,7 +123,9 @@ class ClientCredentialsFlowTest extends AuthorizationCodeFlowSupport {
     @Test
     @DisplayName("a client not registered for the grant is unauthorized_client")
     void unauthorizedClients() {
-        withBasic(MACHINE_TENANT, FakeClientRepository.CONFIDENTIAL_CLIENT_ID, SECRET).then().statusCode(400)
+        request(MACHINE_TENANT)
+                .formParam("client_id", FakeClientRepository.CONFIDENTIAL_CLIENT_ID).formParam("client_secret", SECRET)
+                .when().post("/token").then().statusCode(400)
                 .body("error", Matchers.equalTo("unauthorized_client"));
     }
 
@@ -155,7 +158,7 @@ class ClientCredentialsFlowTest extends AuthorizationCodeFlowSupport {
                 .header("X-Tenant-Id", MACHINE_TENANT)
                 .contentType("application/x-www-form-urlencoded")
                 .formParam("token", accessToken)
-                .formParam("client_id", CLIENT).formParam("client_secret", SECRET)
+                .auth().preemptive().basic(CLIENT, SECRET)
                 .when().post("/introspect")
                 .then().statusCode(200)
                 .body("active", Matchers.is(true))
@@ -167,7 +170,7 @@ class ClientCredentialsFlowTest extends AuthorizationCodeFlowSupport {
                 .header("X-Tenant-Id", MACHINE_TENANT)
                 .contentType("application/x-www-form-urlencoded")
                 .formParam("token", accessToken)
-                .formParam("client_id", CLIENT).formParam("client_secret", SECRET)
+                .auth().preemptive().basic(CLIENT, SECRET)
                 .when().post("/revoke")
                 .then().statusCode(200);
 
@@ -176,7 +179,7 @@ class ClientCredentialsFlowTest extends AuthorizationCodeFlowSupport {
                 .header("X-Tenant-Id", MACHINE_TENANT)
                 .contentType("application/x-www-form-urlencoded")
                 .formParam("token", accessToken)
-                .formParam("client_id", CLIENT).formParam("client_secret", SECRET)
+                .auth().preemptive().basic(CLIENT, SECRET)
                 .when().post("/introspect")
                 .then().statusCode(200).body("active", Matchers.is(true));
     }

@@ -83,8 +83,7 @@ class AssertionClientRevokeIntrospectFlowTest extends AuthorizationCodeFlowSuppo
     private static Response introspectAsMachine(String token) {
         return form(TENANT_OF_CLIENT)
                 .formParam("token", token)
-                .formParam("client_id", FakeClientRepository.MACHINE_CLIENT_ID)
-                .formParam("client_secret", FakeClientSecretVerifier.CORRECT_SECRET)
+                .auth().preemptive().basic(FakeClientRepository.MACHINE_CLIENT_ID, FakeClientSecretVerifier.CORRECT_SECRET)
                 .when().post("/introspect");
     }
 

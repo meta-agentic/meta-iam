@@ -70,15 +70,15 @@ class ClientCredentialsServiceTest {
     private Map<String, Client> clientsOfTenantA() {
         return Map.of(
                 "service", confidential("service", CC, new LinkedHashSet<>(List.of("orders.read", "orders.write")), AUDIENCES,
-                        ClientAuthMethod.CLIENT_SECRET),
+                        ClientAuthMethod.CLIENT_SECRET_POST),
                 "code-only", confidential("code-only", Set.of(new AuthorizationCode()), Set.of("orders.read"),
-                        AUDIENCES, ClientAuthMethod.CLIENT_SECRET),
+                        AUDIENCES, ClientAuthMethod.CLIENT_SECRET_POST),
                 "no-audience", confidential("no-audience", CC, Set.of("orders.read"), Set.of(),
-                        ClientAuthMethod.CLIENT_SECRET),
+                        ClientAuthMethod.CLIENT_SECRET_POST),
                 "mtls-auth", confidential("mtls-auth", CC, Set.of("orders.read"), AUDIENCES, ClientAuthMethod.MTLS),
                 "spa", new PublicClient(new ClientId(UUID.randomUUID()), TENANT_A, CC, Set.of()),
                 "profile-service", confidential("profile-service", CC, Set.of("profile"), AUDIENCES,
-                        ClientAuthMethod.CLIENT_SECRET),
+                        ClientAuthMethod.CLIENT_SECRET_POST),
                 "workload", new ConfidentialClient(WORKLOAD, TENANT_A, CC, ClientAuthMethod.WORKLOAD_IDENTITY, Set.of(),
                         Set.of("orders.read"), AUDIENCES, List.of()),
                 "keyed", new ConfidentialClient(KEYED, TENANT_A, CC, ClientAuthMethod.PRIVATE_KEY_JWT, Set.of(),
@@ -257,8 +257,9 @@ class ClientCredentialsServiceTest {
         assertThat(signed.get().claims()).containsEntry("cnf", Map.of("x5t#S256", "thumb"));
         assertFailed(issue(TENANT_A, "service", SECRET, null, List.of(), null, true),
                 AuthorizationError.INVALID_REQUEST);
+        // An mTLS client never authenticates by a secret, so it does not get as far as the binding.
         assertFailed(issue(TENANT_A, "mtls-auth", SECRET, null, List.of(), null, false),
-                AuthorizationError.INVALID_REQUEST);
+                AuthorizationError.INVALID_CLIENT);
     }
 
     @Test

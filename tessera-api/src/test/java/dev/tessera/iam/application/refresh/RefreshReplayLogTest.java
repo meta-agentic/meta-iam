@@ -90,7 +90,7 @@ class RefreshReplayLogTest {
         RefreshService service = new RefreshService(
                 (realm, clientId) -> Uni.createFrom().item(new ConfidentialClient(CLIENT_ID, realm,
                         Set.of(new AuthorizationCode(), new RefreshToken()),
-                        ClientAuthMethod.CLIENT_SECRET, Set.of("https://c/cb"))),
+                        ClientAuthMethod.CLIENT_SECRET_POST, Set.of("https://c/cb"))),
                 (realm, clientId, presented) -> Uni.createFrom().item(Boolean.TRUE),
                 (realm, typ, claims) -> Uni.createFrom().item("signed.jwt"),
                 new OpaqueIdentifierPort() {
