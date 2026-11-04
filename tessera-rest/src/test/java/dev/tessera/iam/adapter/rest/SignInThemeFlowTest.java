@@ -9,6 +9,8 @@ import static org.hamcrest.Matchers.startsWith;
 
 import dev.tessera.iam.adapter.rest.signin.SignInCookies;
 import dev.tessera.iam.adapter.rest.support.FakeClientRepository;
+import dev.tessera.iam.adapter.rest.support.SignedThemesResource;
+import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import java.net.URI;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@QuarkusTestResource(value = SignedThemesResource.class, restrictToAnnotatedClass = true)
 @DisplayName("Sign-in themes — the page shows the theme its client names, and no other")
 class SignInThemeFlowTest extends AuthorizationCodeFlowSupport {
 
@@ -91,6 +94,7 @@ class SignInThemeFlowTest extends AuthorizationCodeFlowSupport {
         given().when().get("/assets/themes/acme/mark.png").then().statusCode(200).contentType("image/png");
         given().when().get("/assets/themes/acme/fonts/test.woff2").then().statusCode(200).contentType("font/woff2");
         given().when().get("/assets/themes/acme/absent.css").then().statusCode(404);
+        given().when().get("/assets/themes/acme/manifest.jws").then().statusCode(404);
         given().when().get("/assets/themes/gone/theme.css").then().statusCode(404);
         given().urlEncodingEnabled(false).when().get("/assets/themes/acme/..%2f..%2f..%2fapplication.properties")
                 .then().statusCode(404);

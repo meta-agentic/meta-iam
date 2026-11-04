@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.tessera.iam.adapter.rest.signin;
 
+import com.nimbusds.jose.jwk.ECKey;
 import dev.tessera.iam.adapter.rest.signin.SignInThemeConfig.Unthemed;
 import dev.tessera.iam.adapter.rest.signin.ThemeDirectory.Asset;
 import io.quarkus.runtime.StartupEvent;
@@ -49,7 +50,7 @@ public class SignInThemes {
 
     @Inject
     SignInThemes(SignInThemeConfig config) {
-        this(config.directory().map(Path::of).map(ThemeDirectory::read).orElse(Map.of()), config.unthemed());
+        this(read(config), config.unthemed());
     }
 
     SignInThemes(Map<String, Map<String, Asset>> themes, Unthemed unthemed) {
@@ -57,7 +58,12 @@ public class SignInThemes {
         this.unthemed = unthemed;
     }
 
-    /** Reads the themes at boot, so a directory that breaks the rules stops the rollout. */
+    private static Map<String, Map<String, Asset>> read(SignInThemeConfig config) {
+        ECKey key = config.publicKey().map(ThemeManifest::publicKey).orElse(null);
+        return config.directory().map(directory -> ThemeDirectory.read(Path.of(directory), key)).orElse(Map.of());
+    }
+
+    /** Reads and verifies the themes at boot, so a directory that breaks the rules or a theme that fails verification stops the rollout. */
     void onStart(@Observes StartupEvent event) {
         LOG.infof("Sign-in themes: %s; a client with no theme gets: %s", new TreeSet<>(themes.keySet()), unthemed);
     }

@@ -10,19 +10,40 @@ A theme is a directory named after the theme. Its name uses lower-case letters, 
 themes/
   acme/
     theme.css        required; the page links this file
+    manifest.jws     required; signed by your CI, never served
     fonts/acme.woff2
     mark.png
 ```
 
 Only `.css`, `.woff2`, `.png`, `.webp` and `.avif` files are allowed. A link, any other file type, a theme with no `theme.css`, or a directory with an invalid name stops tessera from starting.
 
-Tessera reads the directory once, at boot, and serves the files from memory under `/assets/themes/<name>/`. Refer to a theme's own files with relative URLs, such as `url(fonts/acme.woff2)`.
+Tessera reads and verifies the directory once, at boot, and serves the verified bytes from memory under `/assets/themes/<name>/`. Refer to a theme's own files with relative URLs, such as `url(fonts/acme.woff2)`.
 
 The page's policy allows styles, fonts and images from tessera's own origin only. Remote URLs and `data:` URLs do not load, and nothing runs script.
 
+## Signing a theme
+
+Tessera refuses to start if any theme fails verification, or if themes exist with no public key configured. No setting turns this off. A deployment with no themes needs no key.
+
+Your CI checks a theme against the rules in [ADR-IAM-008](adr/ADR-IAM-008-sign-in-page-themes.md) D4, then signs its manifest. The signature means the theme passed those checks, so keep the private key where only that CI job can use it. Set the public key in the deployment's configuration, not in the image.
+
+`manifest.jws` is a compact JWS. Its header is exactly this:
+
+```json
+{"alg":"ES256","typ":"tessera-theme-manifest+jws"}
+```
+
+Its payload names the theme, which must equal the directory's name, and lists the lower-case hex SHA-256 of every other file in the theme, by path relative to the theme with `/` separators:
+
+```json
+{"theme":"acme","files":{"theme.css":"<sha-256>","fonts/acme.woff2":"<sha-256>"}}
+```
+
+A file missing, added or changed fails the theme.
+
 ## Turning a theme on
 
-1. Set `TESSERA_SIGNIN_THEMES_DIRECTORY` to the directory holding the themes.
+1. Set `TESSERA_SIGNIN_THEMES_DIRECTORY` to the directory holding the themes, and `TESSERA_SIGNIN_THEMES_PUBLIC_KEY` to the public key, as a P-256 JWK.
 2. Name the theme on the client's registration, in `oauth_client.sign_in_theme`. First-boot provisioning sets it from `TESSERA_BOOTSTRAP_CLIENT_SIGN_IN_THEME`, only when it creates the row. For an existing client, update the row.
 
 A request cannot choose a theme, and a deployment has no default theme.

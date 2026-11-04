@@ -12,6 +12,12 @@ public interface SignInThemeConfig {
     /** The directory holding one directory per theme; unset means no themes. */
     Optional<String> directory();
 
+    /**
+     * The public key theme manifests must verify under, as a {@code P-256} JWK. Comes from the
+     * deployment, not the image. Unset is accepted only by a directory with no themes.
+     */
+    Optional<String> publicKey();
+
     /** What a client gets when it names no theme, or names one the directory lacks. */
     @WithDefault("neutral")
     Unthemed unthemed();
