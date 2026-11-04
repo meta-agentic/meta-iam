@@ -34,6 +34,11 @@ jobs:
           java-version: '25'
           cache: maven
 
+      # SignInPageBrowserIT drives these. The version matches the Playwright test dependency in
+      # tessera-rest/pom.xml, so the Java driver finds the browsers it expects.
+      - name: Install the browsers the sign-in page is tested in
+        run: npx --yes playwright@1.64.0 install --with-deps chromium firefox webkit
+
       - name: Build, test, and run integration tests
         run: mvn -B -ntp clean verify
 
