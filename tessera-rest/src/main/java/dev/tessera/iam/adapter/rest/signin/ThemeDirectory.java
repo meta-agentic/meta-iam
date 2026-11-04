@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.tessera.iam.adapter.rest.signin;
 
+import com.nimbusds.jose.jwk.ECKey;
 import dev.tessera.iam.domain.client.SignInTheme;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -20,13 +21,17 @@ import java.util.stream.Stream;
  *
  * <p>A directory that breaks the rules fails the boot. Links are not followed and fail, because
  * one could point outside the pack, and only the file types a theme may hold are accepted
- * (ADR-IAM-008 D1 and D4). The CI gate checks the same before an image exists; this holds whatever
- * the image was built by.
+ * (ADR-IAM-008 D1 and D4). Every theme must also carry a manifest signed by the operator's CI,
+ * covering exactly the files read here (ADR-IAM-008 D6). What is served is the verified bytes,
+ * whatever later happens on disk.
  */
 final class ThemeDirectory {
 
     /** The stylesheet every theme has; the page links this file. */
     static final String STYLESHEET = "theme.css";
+
+    /** The signed manifest every theme has, beside its stylesheet. It is verified, never served. */
+    static final String MANIFEST = "manifest.jws";
 
     private static final Map<String, String> CONTENT_TYPES = Map.of(
             "css", "text/css;charset=UTF-8",
@@ -46,10 +51,12 @@ final class ThemeDirectory {
      * Reads every theme under {@code root}.
      *
      * @param root the directory holding one directory per theme
+     * @param key  the public key manifests must verify under, or {@code null} when none is
+     *             configured, which only a directory with no themes accepts
      * @return the themes by name, each its assets by path relative to the theme, with {@code /}
-     * @throws IllegalStateException when the directory breaks a rule
+     * @throws IllegalStateException when the directory breaks a rule or a theme fails verification
      */
-    static Map<String, Map<String, Asset>> read(Path root) {
+    static Map<String, Map<String, Asset>> read(Path root, ECKey key) {
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalStateException("Sign-in theme directory is not a directory: " + root);
         }
@@ -60,7 +67,11 @@ final class ThemeDirectory {
                 if (!SignInTheme.isValid(name) || !Files.isDirectory(theme, LinkOption.NOFOLLOW_LINKS)) {
                     throw new IllegalStateException("Not a sign-in theme: " + theme);
                 }
-                themes.put(name, Map.copyOf(assets(theme)));
+                if (key == null) {
+                    throw new IllegalStateException("Sign-in theme " + name
+                            + " is present but no public key is configured (iam.signin.themes.public-key)");
+                }
+                themes.put(name, Map.copyOf(verified(theme, name, key)));
             }
         } catch (IOException e) {
             throw new IllegalStateException("Cannot read sign-in themes from " + root, e);
@@ -68,13 +79,27 @@ final class ThemeDirectory {
         return Map.copyOf(themes);
     }
 
-    private static Map<String, Asset> assets(Path theme) throws IOException {
+    private static Map<String, Asset> verified(Path theme, String name, ECKey key) throws IOException {
+        byte[][] manifest = new byte[1][];
+        Map<String, Asset> assets = assets(theme, manifest);
+        if (manifest[0] == null) {
+            throw new IllegalStateException("Sign-in theme " + name + " has no " + MANIFEST);
+        }
+        ThemeManifest.verify(name, manifest[0], assets, key);
+        return assets;
+    }
+
+    private static Map<String, Asset> assets(Path theme, byte[][] manifest) throws IOException {
         Map<String, Asset> assets = new HashMap<>();
         Files.walkFileTree(theme, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                 if (!attributes.isRegularFile()) {
                     throw new IllegalStateException("Sign-in theme file is not a regular file: " + file);
+                }
+                if (file.getParent().equals(theme) && MANIFEST.equals(file.getFileName().toString())) {
+                    manifest[0] = Files.readAllBytes(file);
+                    return FileVisitResult.CONTINUE;
                 }
                 String contentType = contentType(file);
                 if (contentType == null) {
