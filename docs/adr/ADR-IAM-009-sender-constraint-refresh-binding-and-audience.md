@@ -66,7 +66,7 @@ Every client authentication by mode. The profile column says where a row is allo
 | 6 | mTLS | `mtls` | both | Refused, `invalid_client`, until certificate matching is built. Then the certificate authenticates and binds | Refused until then. Its rule is written with certificate matching | The same thumbprint |
 | 7 | Workload identity | `dpop` or `mtls` | both | Refused, `invalid_client`. This client acts for itself: `client_credentials`, and token exchange under ADR-IAM-007 D1's stricter rule (ADR-IAM-010 D3) | Refused: it holds no refresh token | never minted on these grants |
 
-Refused at write and by a `CHECK`: `mtls` or `none` for a public client, `dpop` or `none` for an mTLS-authenticated client, and `none` for a workload client. `none` is also refused for an agent or exchange client, at write and at use, whatever the profile (ADR-IAM-007 D5).
+Refused at write and by a `CHECK`: `mtls` or `none` for a public client, `dpop` or `none` for an mTLS-authenticated client, and `none` for a workload client. `none` is also refused for an agent or exchange client, at write and at use, whatever the profile (ADR-IAM-007 D5). `dpop` for an mTLS-authenticated client is a choice of this record, not a rule of the profile: mTLS client authentication is not built yet, so no client needs the pairing, and allowing it later relaxes nothing already issued.
 
 `client_credentials` follows the same modes through the same function. It has no refresh token. Its audiences stay `oauth_client.audiences`, and it now names one of them, by A1's choice: today a request with no `resource` gets them all (`api/ClientCredentialsService.java:146-148`). Clients registered as agents, or for the exchange grant, follow these rows by how they authenticate; ADR-IAM-007's extra requirements on them still apply.
 
@@ -226,6 +226,7 @@ An authorization code or a pending sign-in in flight that lacks the new fields, 
 - **Echo only at introspection.** It leaves the check of RFC 7662 §4 undone once tokens are per resource.
 - **A network endpoint for the operator's writes.** A new credential and a new attack surface on a public origin, for a write that happens rarely.
 - **A database fence against old instances during a rolling deployment.** It would stop only their refreshes, and they mint on other paths too. Draining them is simpler and covers all of it (D4).
+- **A client holding both `dpop` and `mtls`.** Whoever is calling could then choose which proof to send, so a thief could pick whichever one they can satisfy.
 - **The binding rules differing by profile.** A family proves its binding the same way everywhere. Only rotation and which rows are allowed differ.
 
 ## Open items
