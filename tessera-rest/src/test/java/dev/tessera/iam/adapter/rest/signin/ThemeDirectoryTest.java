@@ -4,14 +4,22 @@ package dev.tessera.iam.adapter.rest.signin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSObject;
+import com.nimbusds.jose.Payload;
+import com.nimbusds.jose.crypto.ECDSASigner;
 import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import dev.tessera.iam.adapter.rest.signin.SignInThemeConfig.Unthemed;
 import dev.tessera.iam.adapter.rest.signin.ThemeDirectory.Asset;
 import dev.tessera.iam.adapter.rest.support.SignedThemes;
+import io.quarkus.runtime.StartupEvent;
+import jakarta.enterprise.event.Observes;
 import java.io.IOException;
+import java.lang.reflect.Parameter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -186,6 +194,20 @@ class ThemeDirectoryTest {
     }
 
     @Test
+    @DisplayName("a file listed twice in a signed manifest fails the boot, whichever value is right")
+    void duplicateFileKey() throws Exception {
+        String good = SignedThemes.sha256(CSS);
+        String payload = "{\"theme\":\"acme\",\"files\":{\"theme.css\":\"" + "0".repeat(64)
+                + "\",\"theme.css\":\"" + good + "\"}}";
+        JWSObject jws = new JWSObject(
+                new JWSHeader.Builder(JWSAlgorithm.ES256).type(new JOSEObjectType(ThemeManifest.TYPE)).build(),
+                new Payload(payload));
+        jws.sign(new ECDSASigner(signing));
+        Files.writeString(theme("acme").resolve("manifest.jws"), jws.serialize());
+        assertRefused("unique keys");
+    }
+
+    @Test
     @DisplayName("what is served is what was verified, whatever later happens on disk")
     void servesVerifiedBytes() throws IOException {
         Path acme = theme("acme");
@@ -265,6 +287,18 @@ class ThemeDirectoryTest {
     void refusesName(String name) throws IOException {
         theme(name);
         assertRefused("Not a sign-in theme");
+    }
+
+    /**
+     * ADR-IAM-008 D6 says tessera refuses to start, not that it refuses a request later. Without this
+     * observer the bean is built lazily and a bad pack surfaces only when someone signs in, while every
+     * other test here still passes.
+     */
+    @Test
+    @DisplayName("the themes are read when tessera starts, not on the first sign-in")
+    void themesAreReadAtStartup() throws NoSuchMethodException {
+        Parameter event = SignInThemes.class.getDeclaredMethod("onStart", StartupEvent.class).getParameters()[0];
+        assertThat(event.isAnnotationPresent(Observes.class)).isTrue();
     }
 
     @Test
