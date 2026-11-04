@@ -10,8 +10,8 @@ import java.util.regex.Pattern;
  * The Content-Security-Policy of the sign-in page, which replaces the server-wide one on that
  * path alone.
  *
- * <p>The page loads its stylesheet from tessera and nothing else, runs no script, and cannot be
- * framed. Its form posts to tessera ({@code form-action 'self'}), but the post is answered with
+ * <p>The page loads its stylesheets, fonts and images from tessera and nothing else, runs no
+ * script, and cannot be framed. Its form posts to tessera ({@code form-action 'self'}), but the post is answered with
  * a redirect to the client, and browsers that enforce {@code form-action} on the redirects that
  * follow a submission would block that last hop unless the client's origin is listed too. So the
  * policy of a form page names the origin of the redirect URI it will end at, which has already
@@ -22,6 +22,8 @@ final class SignInPagePolicy {
 
     private static final String BASE =
             "default-src 'none'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'";
+    /** What a theme's stylesheet may load (ADR-IAM-008 D5). The page with no form shows no theme. */
+    private static final String THEME_ASSETS = "; font-src 'self'; img-src 'self'";
     private static final Pattern SCHEME = Pattern.compile("[A-Za-z][A-Za-z0-9+.-]*");
     private static final Pattern HOST = Pattern.compile("[A-Za-z0-9.-]+|\\[[0-9A-Fa-f:.]+\\]");
 
@@ -31,7 +33,7 @@ final class SignInPagePolicy {
     /** The policy of a page carrying the sign-in form for a request redirecting to {@code redirectUri}. */
     static String form(String redirectUri) {
         String target = source(redirectUri);
-        return BASE + "; form-action 'self'" + (target == null ? "" : " " + target);
+        return BASE + THEME_ASSETS + "; form-action 'self'" + (target == null ? "" : " " + target);
     }
 
     /** The policy of a page with no form. */

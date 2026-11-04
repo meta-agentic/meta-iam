@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/* Neutral styling for the hosted sign-in page. Per-deployment theming is separate work. */
+/* Neutral styling for the hosted sign-in page. A client's theme loads after this file and builds
+   on the contract in docs/sign-in-themes.md. */
 :root {
   color-scheme: light dark;
   --bg: #f6f7f9;
