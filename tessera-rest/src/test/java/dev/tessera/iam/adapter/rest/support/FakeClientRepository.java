@@ -77,6 +77,8 @@ public class FakeClientRepository implements ClientRepositoryPort {
     public static final String ACME_THEME_CLIENT_ID = "acme-spa";
     public static final String ZENITH_THEME_CLIENT_ID = "zenith-spa";
     public static final String MISSING_THEME_CLIENT_ID = "lost-theme-spa";
+    /** A public client naming the theme that attacks its own page (SignInPageBrowserIT). */
+    public static final String HOSTILE_THEME_CLIENT_ID = "hostile-theme-spa";
 
     private static final ClientId PUBLIC_IDENTITY =
             new ClientId(UUID.fromString("00000000-0000-0000-0000-0000000000a0"));
@@ -126,6 +128,7 @@ public class FakeClientRepository implements ClientRepositoryPort {
             case ACME_THEME_CLIENT_ID -> themed(realm, "acme");
             case ZENITH_THEME_CLIENT_ID -> themed(realm, "zenith");
             case MISSING_THEME_CLIENT_ID -> themed(realm, "gone");
+            case HOSTILE_THEME_CLIENT_ID -> themed(realm, "hostile");
             default -> workload(realm, clientId);
         };
         return Uni.createFrom().item(client);
