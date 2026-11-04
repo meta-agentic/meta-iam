@@ -70,7 +70,7 @@ Not checked, because tessera's code cannot show it: TLS version and cipher suite
 | Codes | Single use, at most 60 seconds |
 | Authorization response | `iss` always present (RFC 9207), and `/authorize` never answers CORS |
 | Scopes | A request beyond the client's registered `allowedScopes` is `invalid_scope` |
-| Sign-in | The hosted page only. `POST /login` is removed, so a relying party never handles a password. Themes (ADR-IAM-008) are how a relying party makes the page its own |
+| Sign-in | The hosted page only. `POST /login` is removed, so a relying party never handles a password. `iam.subject.trust-header` is removed, because with it on `/authorize` issues a code from `X-Subject-Id` with no sign-in, for every tenant in the deployment. Themes (ADR-IAM-008) are how a relying party makes the page its own |
 | Public clients | Always bound by DPoP. Never unbound |
 | Agents and exchange clients | Authenticate with a key and are always bound (ADR-IAM-007) |
 | Audience | An access token for a person names one API and is never the issuer (ADR-IAM-009 D3) |
@@ -80,7 +80,7 @@ Not checked, because tessera's code cannot show it: TLS version and cipher suite
 | Limits | D6's limits fail startup |
 
 **Consequences.**
-1. ADR-IAM-006 D2 is amended: a form served by a relying party and posted to `/login` is no longer possible. There are no adopters to carry, and a themed hosted page does the same job.
+1. ADR-IAM-006 D2 is amended: a form served by a relying party and posted to `/login` is no longer possible. A themed hosted page does the same job, and a relying party that still posts there moves first.
 2. The two defects above are fixed for everyone, and neither waits for a profile.
 3. A new request for a setting below this table needs a change to this record, not a configuration option.
 
@@ -90,19 +90,19 @@ Not checked, because tessera's code cannot show it: TLS version and cipher suite
 
 | State | Behaviour | Protects | Costs | Who picks | Default |
 |---|---|---|---|---|---|
-| `standard` | D1, plus secure defaults a mainstream OIDC library can meet: every client binds its tokens unless the operator declares otherwise, and secrets are offered. RFC 9700's requirements hold | Against the threats RFC 9700 covers, for adopters who cannot use FAPI yet | A client on a secret is only as safe as that secret, and one declared `none` gets replayable tokens | Operator | **Yes** |
+| `standard` | D1, plus secure defaults a mainstream OIDC library can meet: every client binds its tokens unless the operator allows and declares otherwise, and secrets are offered. RFC 9700's requirements hold, except that until consent is enforced "as consented" means what the operator registered (ADR-IAM-009 D3) | Against the threats RFC 9700 covers, for adopters who cannot use FAPI yet | A client on a secret is only as safe as that secret, and one declared `none` gets replayable tokens | Operator | **Yes** |
 | `fapi2` | D1, plus the authorization-server part of the FAPI 2.0 Security Profile (D3) | The profile's attacker model | Clients need a backend, a key, DPoP or mTLS, and PAR. Few mainstream libraries do all of that today | Operator; the deployment can also require it (below) | No |
 
 **Where it lives.** It is a column of ADR-IAM-003 D1's tenant registry, which only the administrative role can write. That registry is not built yet, so this work builds its first version. A tenant missing from the registry gets no token, as ADR-IAM-003 D1 says. A tier is a separate question: it covers what a tenant has bought, and a tier never decides the security profile.
 
-**How it is set.** Through ADR-IAM-009 D5's audited declaration. Raising needs nothing more. Lowering also writes its event at warning level, which is ADR-IAM-007's rule 3. `iam.security.minimum-profile`, default `standard`, lets a deployment refuse anything lower for all its tenants: a tenant stored below it is refused at use, and a declaration below it fails startup.
+**How it is set.** Through ADR-IAM-009 D5's audited declaration, applied as the administrative role, which also registers a new tenant. ADR-IAM-003 D1 consequence 4 is amended so its narrow port also returns the profile. Raising needs nothing more. Lowering also writes its event at warning level, which is ADR-IAM-007's rule 3. `iam.security.minimum-profile`, default `standard`, lets a deployment refuse anything lower for all its tenants: a tenant stored below it is refused at use, and a declaration below it fails startup.
 
-**How it is enforced.** At use, by one domain function given the tenant's profile, the client and the request. A client that does not meet its tenant's profile is `invalid_client`. So raising a tenant needs no migration: its non-conforming clients stop at once, which fails closed. Stored clients sit behind per-tenant row-level security and cannot be scanned at startup anyway.
+**How it is enforced.** At use, by one domain function given the tenant's profile, the client and the request. A client that does not meet its tenant's profile is `invalid_client`. So raising a tenant needs no migration: its non-conforming clients stop at once on every endpoint that authenticates a client, which fails closed. Stored clients sit behind per-tenant row-level security and cannot be scanned at startup anyway. What is in flight is checked again: a pending sign-in records whether its request was pushed, and sign-in and code redemption refuse one the profile no longer allows. A refused client's refresh families are not deleted and work again if the tenant is lowered, so an operator who means it permanently also moves `grants_valid_after` (ADR-IAM-009 D5).
 
-**What it means for discovery.** Each realm has its own document (ADR-IAM-003 D3), so each advertises what its tenant's profile enforces. `OidcCapabilities.enforced` takes the profile.
+**What it means for discovery.** Each realm is meant to have its own document (ADR-IAM-003 D3), so each advertises what its tenant's profile enforces, and `OidcCapabilities.enforced` takes the profile. That is not built: today `DiscoveryResource` serves one issuer, publicly cacheable, with no `Vary`, and tenants share `iss` and the assertion `aud`. So until ADR-IAM-003 D3 and D5 ship, `fapi2` is refused in multi-tenant mode at startup and at use, and works in single-tenant mode, where the deployment has one tenant and one document.
 
 **Consequences.**
-1. One deployment can serve a bank-level tenant and an ordinary one side by side, and neither sees the other's settings.
+1. Once ADR-IAM-003 D3 and D5 ship, one deployment can serve a bank-level tenant and an ordinary one side by side. Values set per deployment apply to both, so D6 bounds them, and the weaker tenant cannot widen the stricter one's limits.
 2. `fapi2` is built and tested as a named whole. A long list of independent switches would leave combinations nobody has tested.
 3. A relying party cannot pick a profile. A request never lowers anything.
 
@@ -113,15 +113,15 @@ Not checked, because tessera's code cannot show it: TLS version and cipher suite
 | | `standard` | `fapi2` |
 |---|---|---|
 | Client types | Confidential and public | Confidential only |
-| Client authentication on the code and refresh grants | `private_key_jwt`, mTLS once built, or a secret | `private_key_jwt`, or mTLS once built |
-| Sender constraint | Per client: `dpop` or `mtls`. An operator may declare `none` for a confidential client that is not an agent | `dpop` or `mtls`, always |
+| Client authentication, on every grant and at `/par`, `/introspect` and `/revoke` | `private_key_jwt`, mTLS once built, or a secret | `private_key_jwt`, or mTLS once built, plus the deviation below |
+| Sender constraint | Per client: `dpop` or `mtls`. `none` is off unless `iam.security.allow-unbound-clients` is on, default off, and then an operator may declare it for a confidential client that is not an agent | `dpop` or `mtls`, always |
 | Authorization requests | Pushed or direct. A client may be registered to require PAR (RFC 9126 §6) | Pushed only; `/authorize` takes only `client_id` and `request_uri` |
 | Refresh tokens | Rotate, with reuse detection | Do not rotate |
 | Assertion algorithms | `ES256`, `PS256`, `RS256` | `ES256`, `PS256` |
 | Access-token lifetime | As configured, within D6's limit | At most 15 minutes |
 | Refresh-token limit | As configured | At most 30 days |
 
-Limits under `fapi2` apply when a token is minted, as the lower of the configured value and the limit, because lifetimes are configured per deployment and profiles per tenant.
+Limits under `fapi2` apply as the lower of the configured value and the limit, because lifetimes are configured per deployment and profiles per tenant. The refresh limit is also checked at each refresh against when the family was created, so a family from before a raise cannot outlive it.
 
 **Deviation from the profile, which a `fapi2` tenant accepts by registering such a client.** A keyless workload-identity assertion stays for clients that act for themselves: `client_credentials`, token exchange under ADR-IAM-007 D1's stricter rule (the credential carries a key or its issuer enforces single use), and authenticating at `/introspect` and `/revoke`. On either profile, such a client is refused at `/par`, at `/authorize` and on the code and refresh grants. The profile names only `private_key_jwt` and mTLS. A workload assertion has the same form (an RFC 7523 JWT, asymmetric, `aud` the issuer) but is signed by a trusted platform's key, not a key registered for the client. It may be presented again until it expires unless the issuer enforces single use (`rest/token/NimbusClientAssertionVerifier.java`), and a platform may sign it with `RS256`.
 
@@ -137,7 +137,7 @@ Limits under `fapi2` apply when a token is minted, as the lower of the configure
 **Decision.** These are capabilities first, offered on `standard` and required on `fapi2`:
 - **`private_key_jwt` on the code and refresh grants.** A client needs no shared secret on any profile.
 - **DPoP for confidential clients on every grant,** and `dpop_jkt` (RFC 9449 §10). DPoP works behind an edge that cannot forward a client certificate, and mTLS suits a deployment whose clients already hold certificates. `mtls` is refused where the certificate is not believed.
-- **A shared `jti` store,** which ADR-IAM-007 D7 describes, required once more than one instance runs.
+- **A shared `jti` store,** which ADR-IAM-007 D7 describes, required once more than one instance runs. It is keyed by realm, proof key and `jti`, with a cap per realm, so one tenant's traffic cannot crowd out another's. Today's map is keyed by `jti` alone and uncapped.
 - **Pushed authorization requests.** `POST /par` (RFC 9126) authenticates the client as `/token` does, and `redirect_uri` is required there. A `request_uri` is single-use, bound to the client and the realm, in the shared store codes already use, with `expires_in` defaulting to 60 seconds. A scope beyond `allowedScopes` is `invalid_scope`, and a `resource` not registered is `invalid_target` (ADR-IAM-009 D3). A `DPoP` header is validated and treated as `dpop_jkt`, and a mismatch between the two is refused (RFC 9449 §10.1). `dpop_jkt`, the scopes and the resources travel in the pending sign-in record to the code. Discovery advertises `pushed_authorization_request_endpoint`, and `require_pushed_authorization_requests: true` only under `fapi2`.
 
 **What it means.** The sign-in session starts when the browser arrives with the `request_uri`, so a slow sign-in is bounded by `iam.authflow.sign-in-ttl` and not by the 60 seconds. Under `standard`, `/authorize` still takes direct requests, with the same checks.
@@ -149,7 +149,7 @@ Limits under `fapi2` apply when a token is minted, as the lower of the configure
 
 ## D5 — Refresh rotation follows the profile
 
-**Decision.** Under `standard` a refresh token rotates, with reuse detection and the optional grace, as it does today (RFC 9700 §4.14). Under `fapi2` it stays the same for the life of its grant, as the profile requires, except in an extraordinary event such as moving tokens to a new format, decided by its own record. A family's binding works the same way under both (ADR-IAM-009 D2).
+**Decision.** Under `standard` a refresh token rotates, with reuse detection and the optional grace, as it does today (RFC 9700 §4.14). Under `fapi2` it stays the same for the life of its grant, as the profile requires, except in an extraordinary event such as moving tokens to a new format, decided by its own record. A token superseded before a tenant was raised still takes the replay path and burns its family. A family's binding works the same way under both (ADR-IAM-009 D2).
 
 **Why not one behaviour.** A rotating token gives a public client a theft signal, which `standard` should keep for adopters, and the code is built and tested. `fapi2` forbids it. A stolen refresh token under `fapi2` is useless without the client's private key and the grant's sender key.
 
@@ -163,7 +163,7 @@ Limits under `fapi2` apply when a token is minted, as the lower of the configure
 ## D6 — Values that matter are bounded in code
 
 **Decision.**
-- **Startup fails, on every profile,** on: a code lifetime above 60 seconds; an `iat`/`nbf` tolerance outside 10 to 60 seconds; a `request_uri` lifetime of 600 seconds or more; an access-token lifetime above one hour; a refresh-token limit above 90 days. ADR-IAM-007 already lists the missing bounds as work to do.
+- **Startup fails, on every profile,** on: a code lifetime above 60 seconds; an `iat`/`nbf` tolerance outside 10 to 60 seconds; a `request_uri` lifetime of 600 seconds or more; an access-token lifetime above one hour; a refresh-token limit above 90 days; a DPoP `proof-max-age` above five minutes; an assertion `max-lifetime` above one hour; a `sign-in-ttl` above one hour; a reuse grace above one minute. ADR-IAM-007 already lists missing bounds as work to do, and these values are shared by every tenant in a deployment.
 - A proof's or an assertion's `iat` and `nbf` are accepted up to 10 seconds ahead, on every profile.
 - Under `fapi2`, a `private_key_jwt` assertion must use `ES256` or `PS256` with `aud` as a string, except D3's workload assertions.
 - A `client_credentials` token names one audience, under ADR-IAM-009's rule A1.
@@ -173,7 +173,7 @@ Limits under `fapi2` apply when a token is minted, as the lower of the configure
 
 ## D7 — Each profile has its conformance plan
 
-**Decision.** ADR-IAM-005 stands for `standard`: the Basic OP plan, with its secret clients, once its three gaps are closed. A second nightly run, on the same harness, runs `fapi2-security-profile-final-test-plan` against a `fapi2` tenant once PAR ships. It uses `client_auth_type=private_key_jwt`, `sender_constrain=dpop`, `openid=openid_connect` and the `unsigned` request method (variants read from the suite's `FAPI2SPFinalTestPlan.java` on 2026-11-04), and adds the `mtls` variants when mTLS is usable. Both block only on a new failure against a committed list. Whether to certify stays a separate decision (ADR-IAM-005 D3).
+**Decision.** ADR-IAM-005 stands for `standard`: the Basic OP plan, with its secret clients, once its three gaps are closed. A second nightly run, on the same harness, runs `fapi2-security-profile-final-test-plan` against a `fapi2` tenant once PAR ships. It uses `client_auth_type=private_key_jwt`, `sender_constrain=dpop`, `openid=openid_connect` and the `unsigned` request method (variants read from the suite's `FAPI2SPFinalTestPlan.java` on 2026-11-04), and adds the `mtls` variants when mTLS is usable, on a harness where certificates are believed, which ADR-IAM-005's fixed-tenant harness is not. Both block only on a new failure against a committed list. Whether to certify stays a separate decision (ADR-IAM-005 D3).
 
 **Consequences.** Until the plan passes, tessera says "`fapi2` is built to the FAPI 2.0 Security Profile", never "conformant" or "certified".
 
@@ -193,15 +193,15 @@ Limits under `fapi2` apply when a token is minted, as the lower of the configure
 
 | Step | Work | For |
 |---|---|---|
-| 1 | Fix the two defects: scope checks, and remove `POST /login` once its users have moved | Everyone |
-| 2 | The tenant registry's first version, the profile, and the one enforcing function | Everyone |
+| 1 | Fix the two defects: scope checks, and remove `POST /login` once its users have moved. Remove `iam.subject.trust-header` | Everyone |
+| 2 | The tenant registry's first version, `standard`, `iam.security.minimum-profile` and the one enforcing function | Everyone |
 | 3 | `private_key_jwt` on the code and refresh grants | Everyone |
 | 4 | Per-client mode, DPoP for confidential clients, a refresh proves the binding, the cut-over migration, the audited writer | Everyone |
 | 5 | Per-resource audience | Everyone |
 | 6 | PAR, `dpop_jkt`, shared `jti` store | Everyone |
-| 7 | What only `fapi2` adds: refuse public clients and secrets, no rotation, its limits and algorithms | `fapi2` |
+| 7 | `fapi2` as a state: refuse public clients and secrets, no rotation, its limits and algorithms. The name is unknown and fails startup until this ships (ADR-IAM-007 rule 6) | `fapi2` |
 | 8 | Conformance plans in CI | Each profile |
-| Apart | D6's limits can ship at any point. D8's areas are decided separately | |
+| Apart | D6's limits can ship at any point. ADR-IAM-003 D3 and D5 open `fapi2` to multi-tenant mode. D8's areas are decided separately | |
 
 A relying party that needs `fapi2` proves its client library first, because the result can change step 4's shape, and it moves when steps 3 to 7 are in. Step 4's cut-over deploys with every relying party ready (ADR-IAM-009 D4).
 
@@ -219,7 +219,7 @@ A relying party that needs `fapi2` proves its client library first, because the 
 
 ## Open items
 
-1. **Whether `standard` offers `none`.** ADR-IAM-007's rule says a state below the floor is not offered, yet a Bearer token for a declared confidential client is what most mainstream back-end-for-frontend libraries can receive today. *Recommendation:* offer it, per client, operator-declared, audited, counted per issuance, never for a public client or an agent. The alternative raises the floor and shuts out those libraries.
+1. **Whether `standard` offers `none`.** ADR-IAM-007's rule says a state below the floor is not offered, yet a Bearer token for a declared confidential client is what most mainstream back-end-for-frontend libraries can receive today. *Recommendation:* offer it, off by default, per client, operator-declared, audited, counted per issuance, never for a public client or an agent. It needs ADR-IAM-007's rule 1 amended to allow one declared state below the default. The alternative raises the floor and shuts out those libraries, and D7's Basic OP plan, whose clients send no proof, would then need another answer.
 2. **Removing `POST /login` for everyone.** *Recommendation:* remove it. If an adopter needs a same-site form, reopen this with CSRF protection in place.
 3. **DPoP nonces and FAPI 2.0 Message Signing.** Nonces shorten the window for a replayed proof at the cost of a round trip; the profile lets a server use them and requires a client to support them. Message Signing adds non-repudiation. *Recommendation:* neither at first. Add each as a stricter choice when a tenant's regulation needs it.
 4. **D8's areas.** *Recommendation:* decide user authentication first, because it is what a person meets every day and it changes the hosted page.
