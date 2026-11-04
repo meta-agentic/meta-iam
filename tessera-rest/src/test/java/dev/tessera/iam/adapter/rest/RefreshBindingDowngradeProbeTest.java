@@ -65,7 +65,7 @@ class RefreshBindingDowngradeProbeTest {
                 return Uni.createFrom().item(new ConfidentialClient(
                         FakeClientRepository.CONFIDENTIAL_IDENTITY, realm,
                         Set.of(new AuthorizationCode(), new RefreshToken()),
-                        ClientAuthMethod.CLIENT_SECRET, Set.of(REDIRECT_URI)));
+                        ClientAuthMethod.CLIENT_SECRET_POST, Set.of(REDIRECT_URI)));
             }
             return super.findByClientId(realm, clientId);
         }
