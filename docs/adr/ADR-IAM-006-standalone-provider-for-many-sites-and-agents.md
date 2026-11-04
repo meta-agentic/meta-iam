@@ -4,7 +4,7 @@
 |---|---|
 | Status | **Proposed** |
 | Date | 2026-10-26 |
-| Relates to | [ADR-IAM-002](ADR-IAM-002-standalone-public-origin.md) (standalone public origin), [ADR-IAM-003](ADR-IAM-003-tenant-tier-and-path-scoped-issuer.md) (issuer), [ADR-IAM-004](ADR-IAM-004-end-user-session-and-consent.md) (session, login page), [ADR-IAM-005](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) (conformance) |
+| Relates to | D2 amended by [ADR-IAM-010](ADR-IAM-010-security-floor-and-tenant-profiles.md) D1, once accepted; [ADR-IAM-002](ADR-IAM-002-standalone-public-origin.md) (standalone public origin), [ADR-IAM-003](ADR-IAM-003-tenant-tier-and-path-scoped-issuer.md) (issuer), [ADR-IAM-004](ADR-IAM-004-end-user-session-and-consent.md) (session, login page), [ADR-IAM-005](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) (conformance) |
 
 ---
 
