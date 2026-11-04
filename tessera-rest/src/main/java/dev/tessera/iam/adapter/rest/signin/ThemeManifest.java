@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.tessera.iam.adapter.rest.signin;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -34,6 +39,10 @@ final class ThemeManifest {
 
     /** The {@code typ} header of a manifest, so no other token from the same key can pass for one. */
     static final String TYPE = "tessera-theme-manifest+jws";
+
+    private static final ObjectMapper STRICT_JSON = JsonMapper.builder()
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .build();
 
     private ThemeManifest() {
     }
@@ -114,13 +123,21 @@ final class ThemeManifest {
             if (!jws.verify(new ECDSAVerifier(key))) {
                 throw failure(theme, "its manifest's signature does not verify");
             }
-            Map<String, Object> payload = jws.getPayload().toJSONObject();
-            if (payload == null) {
-                throw failure(theme, "its manifest's payload is not JSON");
-            }
-            return payload;
+            return parseStrict(theme, jws.getPayload().toString());
         } catch (JOSEException e) {
             throw failure(theme, "its manifest's signature cannot be checked");
+        }
+    }
+
+    /**
+     * Refuses a repeated key at any depth. A file listed twice has no single meaning: this parser
+     * would keep the last value, and whatever audits the same manifest might read the first.
+     */
+    private static Map<String, Object> parseStrict(String theme, String payload) {
+        try {
+            return STRICT_JSON.readValue(payload, new TypeReference<Map<String, Object>>() { });
+        } catch (JsonProcessingException e) {
+            throw failure(theme, "its manifest's payload is not valid JSON with unique keys");
         }
     }
 

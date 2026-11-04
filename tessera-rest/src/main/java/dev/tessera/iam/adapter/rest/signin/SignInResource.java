@@ -82,6 +82,10 @@ public class SignInResource {
     record unavailable() implements TemplateInstance {
     }
 
+    /** The page when a client has no theme to show and the deployment refuses that ({@code templates/SignInResource/refused.html}). */
+    record refused() implements TemplateInstance {
+    }
+
     @GET
     @Produces(MediaType.TEXT_HTML)
     @Operation(operationId = "signInPage", summary = "Show the sign-in form for a pending authorization request")
@@ -131,7 +135,8 @@ public class SignInResource {
         return switch (themes.choose(form.theme())) {
             case SignInThemes.Choice.Themed themed -> form(status, form, failed, themed.name());
             case SignInThemes.Choice.Neutral neutral -> form(status, form, failed, null);
-            case SignInThemes.Choice.Refused refused -> unavailable(Response.Status.SERVICE_UNAVAILABLE);
+            case SignInThemes.Choice.Refused refused -> page(Response.Status.SERVICE_UNAVAILABLE,
+                    new refused().render(), SignInPagePolicy.closed());
         };
     }
 
