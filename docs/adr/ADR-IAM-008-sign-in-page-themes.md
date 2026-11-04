@@ -1,4 +1,4 @@
-# ADR-IAM-008 — Themes for the hosted sign-in page: CSS and static assets, chosen per client, shipped as a checked container layer
+# ADR-IAM-008 — Themes for the hosted sign-in page: CSS and static assets, chosen per client, shipped as a checked and signed container layer
 
 | Field | Value |
 |---|---|
@@ -68,11 +68,13 @@ A local test supports D1 and D5. It used a page with the fields of the sign-in f
 - The pack's name is the name of its directory.
 - The base image is pinned by digest.
 
+CI signs a pack only after it passes these checks (D6).
+
 **Consequences.**
 1. Tessera fetches nothing at runtime, and a theme changes only through a new image with a new digest.
 2. One more build step sits between a tessera release and a deployment.
 3. On a shared instance the layer holds several sites' themes, so whoever operates the instance builds it.
-4. The checks hold only if CI is the sole route to the deployed digest. Each operator has to make it so.
+4. D6 makes tessera refuse a pack CI did not sign. A whole image is a different matter: CI being the only route to the deployed digest is still for each operator to ensure.
 
 ## D5 — The sign-in page's policy allows same-origin fonts and images, and stays the second line of defence
 
@@ -91,6 +93,28 @@ A local test supports D1 and D5. It used a page with the fields of the sign-in f
 2. A browser extension is out of the server's reach.
 3. A real-browser test against tessera's own page keeps these claims true. It covers a hostile theme, an inline and a same-origin script, and the HTML escaping of the transaction id and CSRF token.
 
+## D6 — Tessera refuses a theme that is not signed
+
+**Decision.** Tessera serves a theme only if the signature made by CI verifies. At boot it verifies every pack in its theme directory, and it refuses to start if any pack fails. No setting turns this off.
+
+**What it means.**
+- CI signs a manifest as a JWS. The manifest names the theme and lists each file's path and SHA-256.
+- The private key stays in a key service that CI reaches through workload identity. It is never on a laptop.
+- The public key comes from deployment configuration, not from the image.
+- A pack fails if its signature does not verify, if the manifest names a different theme from the directory, or if a file is missing, added or changed.
+- Tessera serves the bytes it verified, held in memory, not whatever is on disk later.
+- Packs present with no public key configured is a failure. A deployment with no packs needs no key and shows the neutral page.
+
+**Consequences.**
+1. The signature means "this pack passed the checks". A pack built by hand or changed after CI is refused, so tessera enforces D4's checks at run time.
+2. A bad pack stops the rollout, and no person signing in meets it. On a platform that keeps the previous revision serving until the new one is ready, the old revision carries on. On a shared instance one bad pack stops the rollout for every site's theme.
+3. D3's neutral page covers a missing theme, not an unsigned one. An unsigned theme never gets that far.
+4. A signature does not make a theme safe. It says the theme passed the checks, and D5's policy remains the defence against what the checks miss.
+5. This does not stop a hostile image build. A layer can replace anything below it, including the code that verifies. Stopping that means controlling who can push and deploy an image, which is an open item.
+6. Using themes at all requires a signing key. The manifest format is documented for adopters.
+
+**Why at boot.** The set of packs does not depend on a tenant, so unlike a client's theme (D3) it can be checked at boot. The operator sees the failure instead of a person signing in.
+
 ## Rejected alternatives
 
 - **Tokens only, with tessera generating the stylesheet.** The smallest surface, but a theme could only look as tessera's CSS allows, and a site's design would have to be built into a public, multi-brand product.
@@ -99,7 +123,15 @@ A local test supports D1 and D5. It used a page with the fields of the sign-in f
 - **Themes inside the tessera repository.** Puts relying parties' brands into a public product.
 - **Mounting themes from a bucket at runtime.** Whoever can write to the bucket changes the password page, nothing is pinned by digest, and startup gains a dependency.
 - **Uploading themes through an admin API.** Needs an admin surface and sanitising, and no customer is asking for it.
+- **Checking a theme's signature only when its page renders.** A person signing in would find the failure, and the server would keep running with a bad pack.
+- **Signing by the theme's author alone.** That says who wrote a pack, not that it passed the checks. It may be added for packs written outside the operator's own repository.
+- **A setting that disables signature checks.** Its only use is to weaken them.
+- **Serving the sign-in page or its assets through a CDN now.** See the open item.
 
 ## Open items
 
 - The D3 setting's name, its other values, and how a misconfiguration is reported.
+- Verifying a signed image at deploy, which D6 cannot do from inside the image.
+- A CDN for theme assets, which needs its own record. The HTML cannot be cached in any case: it is `no-store` and carries a per-request transaction id and CSRF token. There are two shapes:
+  - A CDN in front of tessera's hostname keeps the policy as it is, but it terminates TLS and sees every password.
+  - A separate assets host keeps passwords away from the CDN, and is the shape to prefer. It must be a dedicated hostname named in the policy. The stylesheet must carry a subresource integrity hash taken from the signed manifest, because tessera cannot verify what another host serves. Fonts and images have no such hash, and whoever can read that host's logs can see any signal a hostile selector sends.
