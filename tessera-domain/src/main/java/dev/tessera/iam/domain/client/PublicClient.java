@@ -24,13 +24,25 @@ import java.util.Set;
  * @param postLogoutRedirectUris registered post-logout redirect URIs (exact-match allow-list
  *                      for the end-session endpoint); defensively copied and exposed
  *                      unmodifiable (never {@code null}, may be empty)
+ * @param signInTheme   the theme its sign-in page shows ({@code null} when it names none)
  */
 public record PublicClient(
         ClientId id,
         RealmKey realm,
         Set<GrantType> allowedGrants,
         Set<String> redirectUris,
-        Set<String> postLogoutRedirectUris) implements Client {
+        Set<String> postLogoutRedirectUris,
+        SignInTheme signInTheme) implements Client {
+
+    /** A client whose registration names no sign-in theme. */
+    public PublicClient(
+            ClientId id,
+            RealmKey realm,
+            Set<GrantType> allowedGrants,
+            Set<String> redirectUris,
+            Set<String> postLogoutRedirectUris) {
+        this(id, realm, allowedGrants, redirectUris, postLogoutRedirectUris, null);
+    }
 
     /** A client with no post-logout redirect URI registered. */
     public PublicClient(ClientId id, RealmKey realm, Set<GrantType> allowedGrants, Set<String> redirectUris) {

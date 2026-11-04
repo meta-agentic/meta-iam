@@ -168,6 +168,7 @@ public class FirstBootProvisioner {
                             .map(uris -> String.join(" ", uris))
                             .filter(s -> !s.isBlank())
                             .orElse(null);
+                    entity.signInTheme = present(cfg.signInTheme()).orElse(null);
                     entity.createdAt = Instant.now();
                     LOG.infof("bootstrap: registering confidential client %s (grants %s)",
                             id.get(), entity.allowedGrants);

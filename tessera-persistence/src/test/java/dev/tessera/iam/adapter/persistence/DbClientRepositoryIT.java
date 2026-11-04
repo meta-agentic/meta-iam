@@ -374,6 +374,48 @@ class DbClientRepositoryIT {
 
     @Test
     @RunOnVertxContext
+    @DisplayName("a client's sign-in theme is read back under its tenant, and absent for a client naming none")
+    void signInThemeIsReadBack(UniAsserter asserter) {
+        UUID tenant = UUID.randomUUID();
+        OAuthClientEntity themed = publicClient(tenant, "themed-app", "https://client.example/callback");
+        themed.signInTheme = "acme";
+        OAuthClientEntity plain = publicClient(tenant, "plain-app", "https://client.example/callback");
+
+        asserter.execute(() -> scoped(tenant, s -> s.persistAll(themed, plain).call(s::flush)));
+        asserter.assertThat(
+                () -> clientRepository.findByClientId(realm(tenant), "themed-app"),
+                found -> Assertions.assertThat(found.signInTheme().value()).isEqualTo("acme"));
+        asserter.assertThat(
+                () -> clientRepository.findByClientId(realm(tenant), "plain-app"),
+                found -> Assertions.assertThat(found.signInTheme()).isNull());
+        asserter.assertThat(
+                () -> clientRepository.findByClientId(realm(UUID.randomUUID()), "themed-app"),
+                found -> Assertions.assertThat(found).isNull());
+    }
+
+    @Test
+    @RunOnVertxContext
+    @DisplayName("a theme name that is not a plain name is refused at registration, and by the database itself")
+    void invalidSignInThemeIsRefused(UniAsserter asserter) {
+        UUID tenant = UUID.randomUUID();
+        OAuthClientEntity traversal = publicClient(tenant, "bad-theme", "https://client.example/callback");
+        traversal.signInTheme = "../acme";
+        OAuthClientEntity valid = publicClient(tenant, "bad-theme-sql", "https://client.example/callback");
+
+        asserter.assertFailedWith(
+                () -> scoped(tenant, s -> s.persist(traversal).call(s::flush)),
+                failure -> Assertions.assertThat(failure).hasStackTraceContaining("Invalid sign-in theme name"));
+        asserter.execute(() -> scoped(tenant, s -> s.persist(valid).call(s::flush)));
+        asserter.assertFailedWith(
+                () -> scoped(tenant, s -> s
+                        .createNativeQuery("update oauth_client set sign_in_theme = '../acme' where client_key = :key")
+                        .setParameter("key", "bad-theme-sql")
+                        .executeUpdate()),
+                failure -> Assertions.assertThat(failure).hasStackTraceContaining("oauth_client_sign_in_theme_name"));
+    }
+
+    @Test
+    @RunOnVertxContext
     @DisplayName("a public client registers loopback http and a private-use scheme, but not plain http to a remote host")
     void publicClientRedirectUris(UniAsserter asserter) {
         UUID tenant = UUID.randomUUID();

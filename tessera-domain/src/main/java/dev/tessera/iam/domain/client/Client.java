@@ -58,4 +58,12 @@ public sealed interface Client permits ConfidentialClient, PublicClient {
      * @return an immutable view of the registered post-logout redirect URIs
      */
     Set<String> postLogoutRedirectUris();
+
+    /**
+     * The theme this client's sign-in page shows, from its registration. Never taken from a
+     * request.
+     *
+     * @return the theme, or {@code null} when the registration names none
+     */
+    SignInTheme signInTheme();
 }

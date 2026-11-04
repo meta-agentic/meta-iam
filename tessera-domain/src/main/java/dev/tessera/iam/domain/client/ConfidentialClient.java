@@ -35,6 +35,7 @@ import java.util.Set;
  * @param postLogoutRedirectUris registered post-logout redirect URIs (exact-match allow-list
  *                      for the end-session endpoint); defensively copied and exposed
  *                      unmodifiable (never {@code null}, may be empty)
+ * @param signInTheme   the theme its sign-in page shows ({@code null} when it names none)
  */
 public record ConfidentialClient(
         ClientId id,
@@ -45,7 +46,23 @@ public record ConfidentialClient(
         Set<String> allowedScopes,
         Set<String> audiences,
         List<String> roles,
-        Set<String> postLogoutRedirectUris) implements Client {
+        Set<String> postLogoutRedirectUris,
+        SignInTheme signInTheme) implements Client {
+
+    /** A client whose registration names no sign-in theme. */
+    public ConfidentialClient(
+            ClientId id,
+            RealmKey realm,
+            Set<GrantType> allowedGrants,
+            ClientAuthMethod authMethod,
+            Set<String> redirectUris,
+            Set<String> allowedScopes,
+            Set<String> audiences,
+            List<String> roles,
+            Set<String> postLogoutRedirectUris) {
+        this(id, realm, allowedGrants, authMethod, redirectUris, allowedScopes, audiences, roles,
+                postLogoutRedirectUris, null);
+    }
 
     /** A client with no post-logout redirect URI registered. */
     public ConfidentialClient(

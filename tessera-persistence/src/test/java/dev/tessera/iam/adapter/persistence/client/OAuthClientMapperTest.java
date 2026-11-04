@@ -55,6 +55,27 @@ class OAuthClientMapperTest {
     }
 
     @Test
+    @DisplayName("the sign-in theme maps for both kinds, and is absent when the row names none")
+    void mapsSignInTheme() {
+        OAuthClientEntity confidential = entity(ClientType.CONFIDENTIAL, "CLIENT_SECRET", "authorization_code");
+        confidential.signInTheme = "acme";
+        OAuthClientEntity pub = entity(ClientType.PUBLIC, null, "authorization_code");
+        pub.signInTheme = "zenith";
+        assertThat(OAuthClientMapper.toDomain(confidential).signInTheme().value()).isEqualTo("acme");
+        assertThat(OAuthClientMapper.toDomain(pub).signInTheme().value()).isEqualTo("zenith");
+        assertThat(OAuthClientMapper.toDomain(entity(ClientType.PUBLIC, null, "authorization_code")).signInTheme())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("a corrupt theme name fails loudly (bad registry data)")
+    void corruptSignInThemeRejected() {
+        OAuthClientEntity e = entity(ClientType.PUBLIC, null, "authorization_code");
+        e.signInTheme = "../acme";
+        assertThatThrownBy(() -> OAuthClientMapper.toDomain(e)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("a confidential client with no auth method is rejected (bad registry data)")
     void confidentialWithoutAuthMethodRejected() {
         OAuthClientEntity e = entity(ClientType.CONFIDENTIAL, null, "authorization_code");

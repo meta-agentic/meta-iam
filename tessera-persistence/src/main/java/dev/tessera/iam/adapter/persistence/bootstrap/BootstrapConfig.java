@@ -44,6 +44,9 @@ public interface BootstrapConfig {
         @WithDefault("CLIENT_SECRET_BASIC")
         ClientAuthMethod authMethod();
 
+        /** The theme its sign-in page shows; blank names none. */
+        Optional<String> signInTheme();
+
         /** Allowed grants, as wire values. */
         @WithDefault("authorization_code,refresh_token")
         List<String> grants();

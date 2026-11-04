@@ -11,7 +11,7 @@ Every tessera decision record lives in this folder, and nowhere else.
 | [005 OIDF conformance in CI](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) | Not until the hosted login page, session-aware `prompt`/`max_age`/`auth_time`, and `/userinfo` exist | Accepted |
 | [006 Standalone provider for many sites and agents](ADR-IAM-006-standalone-provider-for-many-sites-and-agents.md) | Hosted sign-in for every relying party, brought forward; brokering in scope; sign-up as its own product; production bar before real accounts | Proposed |
 | [007 Token exchange and the agent delegation profile](ADR-IAM-007-token-exchange-and-agent-delegation-profile.md) | The token exchange grant (RFC 8693) for delegation only: the actor is the key-authenticated client, every hop attenuates, every delegated token is bound and revocable through lineage, and no configuration state weakens security (three declared configuration points); the compile-time exclusion is lifted for this grant | Accepted |
-| [008 Sign-in page themes](ADR-IAM-008-sign-in-page-themes.md) | A theme is CSS and static assets, chosen per client with no deployment default, and shipped as a CI-checked, signed layer on the pinned image; tessera refuses to start with an unsigned theme; the page's policy gains same-origin fonts and images; three open items | Accepted |
+| [008 Sign-in page themes](ADR-IAM-008-sign-in-page-themes.md) | A theme is CSS and static assets, chosen per client with no deployment default, and shipped as a CI-checked, signed layer on the pinned image; tessera refuses to start with an unsigned theme; the page's policy gains same-origin fonts and images; two open items | Accepted |
 
 ## Convention
 
