@@ -55,7 +55,7 @@ A request cannot choose a theme, and a deployment has no default theme.
 | Value | Result |
 |---|---|
 | `neutral` (default) | Tessera's own unbranded page |
-| `refuse` | No form: the page says sign-in is unavailable and answers `503` |
+| `refuse` | No form: the page says sign-in is unavailable because of a setup problem, and answers `503` |
 
 Client registrations cannot be read at boot, so a missing theme is found when a page renders. Tessera logs a warning naming the theme, once per theme name per instance.
 
