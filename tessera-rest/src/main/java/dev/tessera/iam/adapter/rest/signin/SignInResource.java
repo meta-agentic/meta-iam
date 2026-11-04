@@ -71,8 +71,11 @@ public class SignInResource {
     @Inject
     LoginConfig login;
 
+    @Inject
+    SignInThemes themes;
+
     /** The sign-in form ({@code templates/SignInResource/signin.html}). */
-    record signin(String transactionId, String csrfToken, boolean failed) implements TemplateInstance {
+    record signin(String transactionId, String csrfToken, boolean failed, String theme) implements TemplateInstance {
     }
 
     /** The page for a sign-in that cannot continue ({@code templates/SignInResource/unavailable.html}). */
@@ -124,9 +127,17 @@ public class SignInResource {
         });
     }
 
-    private static Response form(Response.Status status, Form form, boolean failed) {
+    private Response form(Response.Status status, Form form, boolean failed) {
+        return switch (themes.choose(form.theme())) {
+            case SignInThemes.Choice.Themed themed -> form(status, form, failed, themed.name());
+            case SignInThemes.Choice.Neutral neutral -> form(status, form, failed, null);
+            case SignInThemes.Choice.Refused refused -> unavailable(Response.Status.SERVICE_UNAVAILABLE);
+        };
+    }
+
+    private static Response form(Response.Status status, Form form, boolean failed, String theme) {
         return page(status,
-                new signin(form.transactionId(), form.csrfToken(), failed).render(),
+                new signin(form.transactionId(), form.csrfToken(), failed, theme).render(),
                 SignInPagePolicy.form(form.redirectUri()));
     }
 

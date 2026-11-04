@@ -63,8 +63,10 @@ public interface SignInUseCase {
      * @param transactionId the transaction id
      * @param csrfToken     the synchronizer token the form carries
      * @param redirectUri   the client's validated redirect URI
+     * @param theme         the theme the client's registration names, or {@code null} when it
+     *                      names none; whether the image holds it is the adapter's to decide
      */
-    record Form(String transactionId, String csrfToken, String redirectUri) {
+    record Form(String transactionId, String csrfToken, String redirectUri, String theme) {
     }
 
     /**

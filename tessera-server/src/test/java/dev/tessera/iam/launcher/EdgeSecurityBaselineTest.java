@@ -51,7 +51,8 @@ class EdgeSecurityBaselineTest {
         assertThat(response.getHeaders().getValues("Content-Security-Policy"))
                 .singleElement()
                 .asString()
-                .contains("style-src 'self'");
+                .contains("style-src 'self'")
+                .doesNotContain("script-src");
         response.then()
                 .header("X-Frame-Options", equalTo("DENY"))
                 .header("X-Content-Type-Options", equalTo("nosniff"));
@@ -83,6 +84,17 @@ class EdgeSecurityBaselineTest {
                 .post("/signin")
                 .then()
                 .statusCode(403);
+    }
+
+    @Test
+    @DisplayName("the path of a sign-in theme's files keeps the server-wide policy and headers")
+    void themeAssetsKeepServerPolicy() {
+        given()
+                .when()
+                .get("/assets/themes/any/theme.css")
+                .then()
+                .header("Content-Security-Policy", containsString("form-action 'none'"))
+                .header("X-Content-Type-Options", equalTo("nosniff"));
     }
 
     @Test

@@ -57,7 +57,8 @@ precise about that boundary matters.
 - **Not a full login _product_.** Tessera hosts one page of its own, the sign-in page at
   `/signin`: `/authorize` sends a browser that has no session there, so every client signs in
   on tessera's origin, whatever site it runs on. It takes a username and password and nothing
-  more: no consent screen, second factor, sign-up or per-deployment theming yet. The
+  more: no consent screen, second factor or sign-up yet. Its look can follow the client
+  ([themes](docs/sign-in-themes.md)). The
   `X-Subject-Id` header that an upstream authenticator
   once supplied instead is default-closed (`iam.subject.trust-header=false`): any inbound
   value is stripped, and a verified session cookie is the only way to establish a subject.
@@ -222,6 +223,8 @@ rather than behind an application gateway, and what that costs, is recorded in
 | `TESSERA_REQUIRE_SENDER_CONSTRAINT=false` | Lets a secret-authenticated confidential client that can present no client certificate (a back-end-for-frontend behind a TLS-terminating edge) receive a plain Bearer token. Leave at the default `true` wherever clients can do mTLS or DPoP. |
 | `TESSERA_CORS_ORIGINS=https://app.example.com` | Allows a relying party that collects the credential on its own page to `POST /login` cross-origin with credentials. The hosted sign-in page posts to its own origin and needs nothing listed. `/authorize` never answers cross-origin, whatever is listed (RFC 9700 §2.6). |
 | `TESSERA_SIGN_IN_TTL=PT10M` (`iam.authflow.sign-in-ttl`) | How long an authorization request may wait on the sign-in page. |
+| `TESSERA_SIGNIN_THEMES_DIRECTORY` (`iam.signin.themes.directory`) | The directory holding sign-in page themes, read once at boot. Unset means no themes ([themes](docs/sign-in-themes.md)). |
+| `TESSERA_SIGNIN_THEMES_UNTHEMED=neutral` (`iam.signin.themes.unthemed`) | What a client gets when it names no theme, or one the directory lacks: `neutral` is tessera's own page, `refuse` shows no sign-in form. |
 | build with `-Dquarkus.profile=prod,singlenode` | For a deployment that runs exactly one instance: the in-process authorization-code and sign-in stores are used and no Infinispan server is needed. Run more than one instance and codes minted on one node cannot be redeemed on another, nor a sign-in started on one finished on another — use the default profile and a shared cache instead. |
 
 Every ID token carries `realm_tenant` and `realm_baseline`, which is how a relying party that
@@ -418,7 +421,8 @@ tagged when the wave's integration test suite passes an end-to-end OIDC flow.
 ### Wave 2 — interactive login
 - [ ] Subject repository port + pluggable credential verifier (password, TOTP, WebAuthn)
 - [x] Hosted sign-in page (server-side rendered, password only) — `/authorize` → `/signin` → code, bound to the browser, shared across nodes
-- [ ] Consent UI, and per-deployment theming of the sign-in page
+- [x] Per-client themes for the sign-in page
+- [ ] Consent UI
 
 ### Wave 3 — RFC completeness & operations
 - [ ] Dynamic client registration — RFC 7591

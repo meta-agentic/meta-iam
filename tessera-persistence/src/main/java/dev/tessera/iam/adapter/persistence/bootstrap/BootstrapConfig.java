@@ -39,6 +39,9 @@ public interface BootstrapConfig {
         /** Registered post-logout redirect URIs (comma-separated in configuration), exact-match. */
         Optional<List<String>> postLogoutRedirectUris();
 
+        /** The theme its sign-in page shows; blank names none. */
+        Optional<String> signInTheme();
+
         /** Allowed grants, as wire values. */
         @WithDefault("authorization_code,refresh_token")
         List<String> grants();
