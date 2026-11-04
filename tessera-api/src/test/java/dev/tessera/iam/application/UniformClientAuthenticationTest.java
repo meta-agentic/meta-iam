@@ -54,7 +54,7 @@ class UniformClientAuthenticationTest {
 
     private final Map<String, Client> registry = Map.of(
             "resource-server", new ConfidentialClient(RESOURCE_SERVER, REALM, Set.of(new AuthorizationCode()),
-                    ClientAuthMethod.CLIENT_SECRET, Set.of()),
+                    ClientAuthMethod.CLIENT_SECRET_POST, Set.of()),
             "spa", new PublicClient(new ClientId(UUID.randomUUID()), REALM, Set.of(new AuthorizationCode()),
                     Set.of()));
 

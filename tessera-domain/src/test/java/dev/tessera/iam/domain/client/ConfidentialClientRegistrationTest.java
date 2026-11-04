@@ -25,14 +25,14 @@ class ConfidentialClientRegistrationTest {
 
     private static ConfidentialClient client(Set<String> scopes, Set<String> audiences, List<String> roles) {
         return new ConfidentialClient(ClientId.generate(), new RealmKey(TenantId.generate(), BaselineId.generate()),
-                CC, ClientAuthMethod.CLIENT_SECRET, Set.of(), scopes, audiences, roles);
+                CC, ClientAuthMethod.CLIENT_SECRET_BASIC, Set.of(), scopes, audiences, roles);
     }
 
     @Test
     @DisplayName("the five-argument form means nothing is registered")
     void fiveArgumentFormRegistersNothing() {
         ConfidentialClient client = new ConfidentialClient(ClientId.generate(),
-                new RealmKey(TenantId.generate(), BaselineId.generate()), CC, ClientAuthMethod.CLIENT_SECRET,
+                new RealmKey(TenantId.generate(), BaselineId.generate()), CC, ClientAuthMethod.CLIENT_SECRET_BASIC,
                 Set.of());
         assertThat(client.allowedScopes()).isEmpty();
         assertThat(client.audiences()).isEmpty();

@@ -58,7 +58,7 @@ class RefreshServiceTest {
     private final InMemoryRefreshTokenStore store = new InMemoryRefreshTokenStore();
     private final AtomicInteger signerCalls = new AtomicInteger();
 
-    private ClientAuthMethod registeredMethod = ClientAuthMethod.CLIENT_SECRET;
+    private ClientAuthMethod registeredMethod = ClientAuthMethod.CLIENT_SECRET_POST;
 
     private final ClientRepositoryPort clients = (realm, clientId) -> Uni.createFrom().item(
             CONF_WIRE.equals(clientId)

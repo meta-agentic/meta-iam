@@ -77,11 +77,12 @@ class ClientAuthenticationHardeningFlowTest extends AuthorizationCodeFlowSupport
 
     @ParameterizedTest
     @ValueSource(strings = {"/token", "/introspect", "/revoke"})
-    @DisplayName("a client registered for either way keeps working both ways, and a wrong secret by Basic is challenged")
-    void either(String endpoint) {
-        String client = FakeClientRepository.CONFIDENTIAL_CLIENT_ID;
-        viaBasic(endpoint, client, "wrong").then().statusCode(401).header("WWW-Authenticate", startsWith("Basic"));
-        viaBody(endpoint, client, "wrong").then().statusCode(401).header("WWW-Authenticate", nullValue());
+    @DisplayName("a wrong secret by Basic is challenged, and a wrong secret in the body is not")
+    void wrongSecret(String endpoint) {
+        viaBasic(endpoint, FakeClientRepository.BASIC_ONLY_CLIENT_ID, "wrong")
+                .then().statusCode(401).header("WWW-Authenticate", startsWith("Basic"));
+        viaBody(endpoint, FakeClientRepository.POST_ONLY_CLIENT_ID, "wrong")
+                .then().statusCode(401).header("WWW-Authenticate", nullValue());
     }
 
     private String codeFor(String client, String verifier) {

@@ -109,14 +109,14 @@ public class FakeClientRepository implements ClientRepositoryPort {
             case PUBLIC_CLIENT_ID -> new PublicClient(
                     PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, POST_LOGOUT_REDIRECTS);
             case CONFIDENTIAL_CLIENT_ID -> new ConfidentialClient(
-                    CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET, REDIRECTS);
+                    CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
             case NO_CODE_CLIENT_ID -> new ConfidentialClient(
-                    NO_CODE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.CLIENT_SECRET, REDIRECTS);
+                    NO_CODE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
             case REFRESH_CLIENT_ID -> new PublicClient(
                     REFRESH_IDENTITY, realm, CODE_AND_REFRESH, REDIRECTS, POST_LOGOUT_REDIRECTS);
             case MACHINE_CLIENT_ID -> MACHINE_TENANT.equals(realm.tenant().value().toString())
                     ? new ConfidentialClient(MACHINE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
-                            ClientAuthMethod.CLIENT_SECRET, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
+                            ClientAuthMethod.CLIENT_SECRET_BASIC, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
                     : null;
             case KEYED_CLIENT_ID -> MACHINE_TENANT.equals(realm.tenant().value().toString())
                     ? new ConfidentialClient(KEYED_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,

@@ -28,17 +28,11 @@ public enum ClientAuthMethod {
     CLIENT_SECRET_BASIC,
 
     /** Shared secret in the form body ({@code client_secret_post}). */
-    CLIENT_SECRET_POST,
-
-    /**
-     * Shared secret, either way. Every registration made before the two narrower methods existed
-     * holds this, and it keeps working as registered. New registrations should name one.
-     */
-    CLIENT_SECRET;
+    CLIENT_SECRET_POST;
 
     /** Whether a client registered for this method holds a shared secret at all. */
     public boolean holdsSecret() {
-        return this == CLIENT_SECRET_BASIC || this == CLIENT_SECRET_POST || this == CLIENT_SECRET;
+        return this == CLIENT_SECRET_BASIC || this == CLIENT_SECRET_POST;
     }
 
     /**
@@ -49,7 +43,6 @@ public enum ClientAuthMethod {
      */
     public boolean acceptsSecret(ClientSecretPresentation presentation) {
         return switch (this) {
-            case CLIENT_SECRET -> true;
             case CLIENT_SECRET_BASIC -> presentation == ClientSecretPresentation.BASIC;
             case CLIENT_SECRET_POST -> presentation == ClientSecretPresentation.POST;
             case MTLS, PRIVATE_KEY_JWT, WORKLOAD_IDENTITY -> false;

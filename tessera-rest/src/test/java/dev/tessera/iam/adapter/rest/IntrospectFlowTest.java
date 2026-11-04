@@ -192,7 +192,7 @@ class IntrospectFlowTest {
         String tenant = UUID.randomUUID().toString();
         Tokens tokens = issue(tenant, UUID.randomUUID().toString());
         String basic = "Basic " + Base64.getEncoder().encodeToString(
-                (CALLER + ":" + CALLER_SECRET).getBytes(StandardCharsets.UTF_8));
+                (FakeClientRepository.BASIC_ONLY_CLIENT_ID + ":" + CALLER_SECRET).getBytes(StandardCharsets.UTF_8));
 
         for (String token : new String[] {tokens.accessToken(), tokens.refreshToken()}) {
             given().config(noFollow())

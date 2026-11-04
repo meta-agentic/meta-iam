@@ -40,7 +40,7 @@ public interface BootstrapConfig {
         /** Registered post-logout redirect URIs (comma-separated in configuration), exact-match. */
         Optional<List<String>> postLogoutRedirectUris();
 
-        /** How it presents its secret: {@code CLIENT_SECRET_BASIC}, {@code CLIENT_SECRET_POST} or {@code CLIENT_SECRET}, either. */
+        /** How it presents its secret: {@code CLIENT_SECRET_BASIC} or {@code CLIENT_SECRET_POST}. */
         @WithDefault("CLIENT_SECRET_BASIC")
         ClientAuthMethod authMethod();
 

@@ -19,8 +19,6 @@ class ClientAuthMethodTest {
         assertThat(ClientAuthMethod.CLIENT_SECRET_BASIC.acceptsSecret(POST)).isFalse();
         assertThat(ClientAuthMethod.CLIENT_SECRET_POST.acceptsSecret(POST)).isTrue();
         assertThat(ClientAuthMethod.CLIENT_SECRET_POST.acceptsSecret(BASIC)).isFalse();
-        assertThat(ClientAuthMethod.CLIENT_SECRET.acceptsSecret(BASIC)).isTrue();
-        assertThat(ClientAuthMethod.CLIENT_SECRET.acceptsSecret(POST)).isTrue();
     }
 
     @ParameterizedTest
