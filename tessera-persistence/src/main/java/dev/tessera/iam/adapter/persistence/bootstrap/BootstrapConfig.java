@@ -1,5 +1,6 @@
 package dev.tessera.iam.adapter.persistence.bootstrap;
 
+import dev.tessera.iam.domain.client.ClientAuthMethod;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import java.util.List;
@@ -38,6 +39,10 @@ public interface BootstrapConfig {
 
         /** Registered post-logout redirect URIs (comma-separated in configuration), exact-match. */
         Optional<List<String>> postLogoutRedirectUris();
+
+        /** How it presents its secret: {@code CLIENT_SECRET_BASIC} or {@code CLIENT_SECRET_POST}. */
+        @WithDefault("CLIENT_SECRET_BASIC")
+        ClientAuthMethod authMethod();
 
         /** The theme its sign-in page shows; blank names none. */
         Optional<String> signInTheme();

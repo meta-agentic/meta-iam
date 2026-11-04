@@ -107,7 +107,7 @@ class NoCrossTenantLeakageIT {
         e.baselineId = UUID.randomUUID();
         e.clientKey = m.clientKey();
         e.clientType = ClientType.CONFIDENTIAL;
-        e.authMethod = "CLIENT_SECRET";
+        e.authMethod = "CLIENT_SECRET_BASIC";
         e.allowedGrants = "authorization_code";
         e.createdAt = T0;
         return e;

@@ -67,6 +67,12 @@ public class FakeClientRepository implements ClientRepositoryPort {
     public static final ClientId CONFIDENTIAL_IDENTITY =
             new ClientId(UUID.fromString("00000000-0000-0000-0000-0000000000c0"));
 
+    /** Confidential clients holding {@link FakeClientSecretVerifier#CORRECT_SECRET}, each registered for one method. */
+    public static final String BASIC_ONLY_CLIENT_ID = "basic-only";
+    public static final String POST_ONLY_CLIENT_ID = "post-only";
+    /** An mTLS client with a secret hash stored against it, which must never authenticate by it. */
+    public static final String MTLS_WITH_SECRET_CLIENT_ID = "mtls-with-secret";
+
     /** Public clients whose registrations name a theme: the two the test themes hold, and one they do not. */
     public static final String ACME_THEME_CLIENT_ID = "acme-spa";
     public static final String ZENITH_THEME_CLIENT_ID = "zenith-spa";
@@ -103,19 +109,22 @@ public class FakeClientRepository implements ClientRepositoryPort {
             case PUBLIC_CLIENT_ID -> new PublicClient(
                     PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, POST_LOGOUT_REDIRECTS);
             case CONFIDENTIAL_CLIENT_ID -> new ConfidentialClient(
-                    CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET, REDIRECTS);
+                    CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
             case NO_CODE_CLIENT_ID -> new ConfidentialClient(
-                    NO_CODE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.CLIENT_SECRET, REDIRECTS);
+                    NO_CODE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
             case REFRESH_CLIENT_ID -> new PublicClient(
                     REFRESH_IDENTITY, realm, CODE_AND_REFRESH, REDIRECTS, POST_LOGOUT_REDIRECTS);
             case MACHINE_CLIENT_ID -> MACHINE_TENANT.equals(realm.tenant().value().toString())
                     ? new ConfidentialClient(MACHINE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
-                            ClientAuthMethod.CLIENT_SECRET, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
+                            ClientAuthMethod.CLIENT_SECRET_BASIC, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
                     : null;
             case KEYED_CLIENT_ID -> MACHINE_TENANT.equals(realm.tenant().value().toString())
                     ? new ConfidentialClient(KEYED_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
                             ClientAuthMethod.PRIVATE_KEY_JWT, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
                     : null;
+            case BASIC_ONLY_CLIENT_ID -> byMethod(realm, ClientAuthMethod.CLIENT_SECRET_BASIC);
+            case POST_ONLY_CLIENT_ID -> byMethod(realm, ClientAuthMethod.CLIENT_SECRET_POST);
+            case MTLS_WITH_SECRET_CLIENT_ID -> byMethod(realm, ClientAuthMethod.MTLS);
             case ACME_THEME_CLIENT_ID -> themed(realm, "acme");
             case ZENITH_THEME_CLIENT_ID -> themed(realm, "zenith");
             case MISSING_THEME_CLIENT_ID -> themed(realm, "gone");
@@ -123,6 +132,12 @@ public class FakeClientRepository implements ClientRepositoryPort {
             default -> workload(realm, clientId);
         };
         return Uni.createFrom().item(client);
+    }
+
+    private static Client byMethod(RealmKey realm, ClientAuthMethod method) {
+        return new ConfidentialClient(CONFIDENTIAL_IDENTITY, realm,
+                Set.of(new AuthorizationCode(), new ClientCredentials(), new RefreshToken()), method, REDIRECTS,
+                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES);
     }
 
     private static Client themed(RealmKey realm, String theme) {

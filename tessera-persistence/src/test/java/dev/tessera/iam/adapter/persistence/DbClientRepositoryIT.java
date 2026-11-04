@@ -85,7 +85,7 @@ class DbClientRepositoryIT {
         e.baselineId = new UUID(0L, 0L);
         e.clientKey = key;
         e.clientType = ClientType.CONFIDENTIAL;
-        e.authMethod = "CLIENT_SECRET";
+        e.authMethod = "CLIENT_SECRET_BASIC";
         e.allowedGrants = "authorization_code";
         e.redirectUris = "https://client.example/callback";
         e.secretHash = secretHash;
@@ -358,6 +358,34 @@ class DbClientRepositoryIT {
                 () -> clientRepository.findByClientId(realm(tenant), "updated-app"),
                 found -> Assertions.assertThat(found.redirectUris())
                         .containsExactly("https://client.example/callback"));
+    }
+
+    @Test
+    @RunOnVertxContext
+    @DisplayName("a client authentication method tessera does not know is refused by the database")
+    void unknownAuthMethodIsRefused(UniAsserter asserter) {
+        UUID tenant = UUID.randomUUID();
+        OAuthClientEntity client = publicClient(tenant, "either-way-app", "https://client.example/callback");
+
+        asserter.execute(() -> scoped(tenant, s -> s.persist(client).call(s::flush)));
+        asserter.assertFailedWith(
+                () -> scoped(tenant, s -> s
+                        .createNativeQuery("update oauth_client set auth_method = 'CLIENT_SECRET' where client_key = :key")
+                        .setParameter("key", "either-way-app")
+                        .executeUpdate()),
+                failure -> Assertions.assertThat(failure).hasStackTraceContaining("ck_oauth_client_auth_method_known"));
+    }
+
+    @Test
+    @RunOnVertxContext
+    @DisplayName("a client id shaped like a user's sub is refused, so a client's token can never name a user")
+    void clientIdShapedLikeAUserSubIsRefused(UniAsserter asserter) {
+        UUID tenant = UUID.randomUUID();
+        OAuthClientEntity client = publicClient(tenant, UUID.randomUUID().toString(), "https://client.example/callback");
+
+        asserter.assertFailedWith(
+                () -> scoped(tenant, s -> s.persist(client).call(s::flush)),
+                failure -> Assertions.assertThat(failure).hasStackTraceContaining("shape of a user's sub"));
     }
 
     @Test

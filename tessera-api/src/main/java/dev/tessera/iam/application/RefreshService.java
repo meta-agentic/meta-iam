@@ -13,6 +13,7 @@ import dev.tessera.iam.application.refresh.RefreshTokenCodec;
 import dev.tessera.iam.domain.authcode.AuthorizationError;
 import dev.tessera.iam.domain.authcode.IssuedTokenClaims;
 import dev.tessera.iam.domain.client.Client;
+import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.client.ConfidentialClient;
 import dev.tessera.iam.domain.client.PublicClient;
 import dev.tessera.iam.domain.client.grant.GrantType;
@@ -184,7 +185,8 @@ public final class RefreshService implements RefreshUseCase {
                 if (client == null || !allowsRefresh(client)) {
                     return invalidGrant("refresh token is invalid");
                 }
-                return authenticate(authoritativeRealm, client, command.clientSecret()).flatMap(ok -> {
+                return authenticate(authoritativeRealm, client, command.clientSecret(), command.secretPresentation())
+                        .flatMap(ok -> {
                     if (!ok) {
                         return invalidClient("client authentication failed");
                     }
@@ -296,7 +298,8 @@ public final class RefreshService implements RefreshUseCase {
         return successorKey != null;
     }
 
-    private Uni<Boolean> authenticate(RealmKey realm, Client client, String presentedSecret) {
+    private Uni<Boolean> authenticate(
+            RealmKey realm, Client client, String presentedSecret, ClientSecretPresentation presentation) {
         return switch (client) {
             case PublicClient ignored ->
                     // A public client holds no secret; possession of the refresh token is the proof.
@@ -305,7 +308,11 @@ public final class RefreshService implements RefreshUseCase {
                 if (presentedSecret == null || presentedSecret.isBlank()) {
                     yield Uni.createFrom().item(Boolean.FALSE);
                 }
-                yield secretVerifier.verifySecret(realm, confidential.id(), presentedSecret);
+                // The registered method decides, after the same verification: an mTLS or assertion
+                // client never authenticates by a secret, and basic and post are not interchangeable.
+                yield secretVerifier.verifySecret(realm, confidential.id(), presentedSecret)
+                        .map(verified -> Boolean.TRUE.equals(verified)
+                                && confidential.authMethod().acceptsSecret(presentation));
             }
         };
     }

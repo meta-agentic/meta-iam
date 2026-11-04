@@ -69,7 +69,7 @@ class RefreshReuseGraceTest {
     private final ClientRepositoryPort clients = (realm, clientId) -> Uni.createFrom().item(
             CLIENT_WIRE.equals(clientId)
                     ? new ConfidentialClient(CLIENT_ID, realm, CODE_AND_REFRESH,
-                            ClientAuthMethod.CLIENT_SECRET, Set.of("https://c/cb"))
+                            ClientAuthMethod.CLIENT_SECRET_POST, Set.of("https://c/cb"))
                     : PUBLIC_WIRE.equals(clientId)
                             ? new PublicClient(PUBLIC_ID, realm, CODE_AND_REFRESH, Set.of("https://c/cb"))
                             : (Client) null);

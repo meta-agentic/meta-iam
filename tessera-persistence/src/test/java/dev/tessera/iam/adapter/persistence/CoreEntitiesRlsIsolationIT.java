@@ -127,7 +127,7 @@ class CoreEntitiesRlsIsolationIT {
         entity.baselineId = UUID.randomUUID();
         entity.clientKey = clientKey;
         entity.clientType = ClientType.CONFIDENTIAL;
-        entity.authMethod = "CLIENT_SECRET";
+        entity.authMethod = "CLIENT_SECRET_BASIC";
         entity.allowedGrants = "authorization_code";
         entity.createdAt = T0;
         return entity;

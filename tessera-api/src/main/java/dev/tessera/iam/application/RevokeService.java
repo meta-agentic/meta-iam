@@ -75,7 +75,7 @@ public final class RevokeService implements RevokeUseCase {
         return clients.findByClientId(command.realm(), command.clientId())
                 .flatMap(client -> ClientAuthentication.authenticate(secretVerifier, keySource,
                                 assertionVerifier, ReplayBudget.INTROSPECTION_AND_REVOCATION, command.realm(), command.clientId(), client,
-                                command.clientSecret(), command.clientAssertion(), true)
+                                command.clientSecret(), command.secretPresentation(), command.clientAssertion(), true)
                         .flatMap(ok -> ok
                                 ? revokeIfOwnedRefreshToken(command.realm(), client, command.token())
                                         .replaceWith(done())
