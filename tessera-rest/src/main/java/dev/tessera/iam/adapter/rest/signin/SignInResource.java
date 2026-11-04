@@ -58,6 +58,13 @@ public class SignInResource {
 
     private static final String HTML = MediaType.TEXT_HTML + ";charset=UTF-8";
     private static final String SAME_ORIGIN = "same-origin";
+    /**
+     * Not the server-wide {@code no-referrer}: under that a browser posts this page's form with
+     * {@code Origin: null}, which the CORS filter refuses. This keeps the real origin on a post to
+     * tessera, and still sends nothing to another origin, so the transaction id in the page's URL
+     * does not leak on the redirect to the client.
+     */
+    private static final String REFERRER_POLICY = "same-origin";
 
     @Inject
     SignInUseCase signIn;
@@ -71,12 +78,19 @@ public class SignInResource {
     @Inject
     LoginConfig login;
 
+    @Inject
+    SignInThemes themes;
+
     /** The sign-in form ({@code templates/SignInResource/signin.html}). */
-    record signin(String transactionId, String csrfToken, boolean failed) implements TemplateInstance {
+    record signin(String transactionId, String csrfToken, boolean failed, String theme) implements TemplateInstance {
     }
 
     /** The page for a sign-in that cannot continue ({@code templates/SignInResource/unavailable.html}). */
     record unavailable() implements TemplateInstance {
+    }
+
+    /** The page when a client has no theme to show and the deployment refuses that ({@code templates/SignInResource/refused.html}). */
+    record refused() implements TemplateInstance {
     }
 
     @GET
@@ -117,6 +131,7 @@ public class SignInResource {
                                     completed.sessionId().toString(), login.sessionTtl().toSeconds()),
                             SignInCookies.clear(uriInfo))
                     .header("Cache-Control", "no-store")
+                    .header("Referrer-Policy", REFERRER_POLICY)
                     .build();
             case SubmitResult.Denied denied -> form(Response.Status.UNAUTHORIZED, denied.form(), true);
             case SubmitResult.Unavailable unavailable -> unavailable(Response.Status.BAD_REQUEST);
@@ -124,9 +139,18 @@ public class SignInResource {
         });
     }
 
-    private static Response form(Response.Status status, Form form, boolean failed) {
+    private Response form(Response.Status status, Form form, boolean failed) {
+        return switch (themes.choose(form.theme())) {
+            case SignInThemes.Choice.Themed themed -> form(status, form, failed, themed.name());
+            case SignInThemes.Choice.Neutral neutral -> form(status, form, failed, null);
+            case SignInThemes.Choice.Refused refused -> page(Response.Status.SERVICE_UNAVAILABLE,
+                    new refused().render(), SignInPagePolicy.closed());
+        };
+    }
+
+    private static Response form(Response.Status status, Form form, boolean failed, String theme) {
         return page(status,
-                new signin(form.transactionId(), form.csrfToken(), failed).render(),
+                new signin(form.transactionId(), form.csrfToken(), failed, theme).render(),
                 SignInPagePolicy.form(form.redirectUri()));
     }
 
@@ -139,6 +163,7 @@ public class SignInResource {
                 .type(HTML)
                 .entity(body)
                 .header("Content-Security-Policy", policy)
+                .header("Referrer-Policy", REFERRER_POLICY)
                 .header("Cache-Control", "no-store")
                 .build();
     }

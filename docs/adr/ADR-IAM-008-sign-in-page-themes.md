@@ -51,7 +51,7 @@ A local test supports D1 and D5. It used a page with the fields of the sign-in f
 
 **Decision.** What a client gets when it names no theme, or names one the image lacks, is a tessera configuration setting. By default it gets tessera's neutral page.
 
-**What it means.** The neutral page is tessera's own unbranded page, not a site's theme, so it does not reopen D2.
+**What it means.** The neutral page is tessera's own unbranded page, not a site's theme, so it does not reopen D2. The setting is `iam.signin.themes.unthemed`: `neutral`, the default, or `refuse`, which shows no form and answers `503` for a deployment where a page without a site's look is a fault. A client naming a theme the deployment lacks is logged as a warning, once per theme name per instance, naming the theme.
 
 **Consequences.**
 1. A client naming a theme the image lacks is found only when the page renders, because nothing can list client themes at boot. The page must still work in that case.
@@ -130,7 +130,6 @@ CI signs a pack only after it passes these checks (D6).
 
 ## Open items
 
-- The D3 setting's name, its other values, and how a misconfiguration is reported.
 - Verifying a signed image at deploy, which D6 cannot do from inside the image.
 - A CDN for theme assets, which needs its own record. The HTML cannot be cached in any case: it is `no-store` and carries a per-request transaction id and CSRF token. There are two shapes:
   - A CDN in front of tessera's hostname keeps the policy as it is, but it terminates TLS and sees every password.

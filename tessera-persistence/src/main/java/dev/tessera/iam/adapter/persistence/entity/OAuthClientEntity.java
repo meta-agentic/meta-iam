@@ -2,6 +2,7 @@ package dev.tessera.iam.adapter.persistence.entity;
 
 import dev.tessera.iam.application.port.out.ClientSecretVerifierPort;
 import dev.tessera.iam.domain.client.RedirectUriPolicy;
+import dev.tessera.iam.domain.client.SignInTheme;
 import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -30,7 +31,8 @@ import java.util.UUID;
  *
  * <p>Every insert and update checks {@link #redirectUris} and {@link #postLogoutRedirectUris}
  * against {@link RedirectUriPolicy}, so no registration path can store a redirect URI that would
- * carry a code, or send a signed-out browser, over plain http.
+ * carry a code, or send a signed-out browser, over plain http. They also check
+ * {@link #signInTheme} against {@link SignInTheme}.
  */
 @Entity
 @Table(name = "oauth_client")
@@ -118,6 +120,10 @@ public class OAuthClientEntity extends PanacheEntityBase {
     @Column(name = "roles")
     public String roles;
 
+    /** The theme this client's hosted sign-in page shows; {@code null} when it names none. */
+    @Column(name = "sign_in_theme")
+    public String signInTheme;
+
     /** Creation instant (UTC). */
     @Column(name = "created_at", nullable = false, updatable = false)
     public Instant createdAt;
@@ -142,6 +148,9 @@ public class OAuthClientEntity extends PanacheEntityBase {
         }
         requireRegistrable(redirectUris);
         requireRegistrable(postLogoutRedirectUris);
+        if (signInTheme != null && !SignInTheme.isValid(signInTheme)) {
+            throw new IllegalArgumentException("Invalid sign-in theme name: " + signInTheme);
+        }
     }
 
     private void requireRegistrable(String uris) {

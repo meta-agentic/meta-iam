@@ -103,9 +103,9 @@ public final class SignInService implements SignInUseCase {
             return Uni.createFrom().item(new FormResult.Unavailable());
         }
         return pending.find(realm, transactionId)
-                .map(entry -> entry != null && bound(entry, binding) && !entry.isExpired(clock.instant())
-                        ? new FormResult.Shown(form(entry))
-                        : new FormResult.Unavailable());
+                .flatMap(entry -> entry != null && bound(entry, binding) && !entry.isExpired(clock.instant())
+                        ? form(entry).map(form -> (FormResult) new FormResult.Shown(form))
+                        : Uni.createFrom().item(new FormResult.Unavailable()));
     }
 
     @Override
@@ -126,12 +126,11 @@ public final class SignInService implements SignInUseCase {
                 return unavailable();
             }
             if (isBlank(submission.username()) || isBlank(submission.password())) {
-                return Uni.createFrom().item((SubmitResult) new SubmitResult.Denied(form(entry)));
+                return denied(entry);
             }
             return login.login(realm, submission.username(), submission.password())
                     .flatMap(result -> switch (result) {
-                        case LoginResult.Denied denied ->
-                                Uni.createFrom().item((SubmitResult) new SubmitResult.Denied(form(entry)));
+                        case LoginResult.Denied denied -> denied(entry);
                         case LoginResult.Authenticated authenticated -> answer(realm, entry, authenticated);
                     });
         });
@@ -156,8 +155,19 @@ public final class SignInService implements SignInUseCase {
         });
     }
 
-    private static Form form(PendingAuthorization entry) {
-        return new Form(entry.transactionId(), entry.csrfToken(), entry.request().redirectUri());
+    private Uni<SubmitResult> denied(PendingAuthorization entry) {
+        return form(entry).map(SubmitResult.Denied::new);
+    }
+
+    /**
+     * The form for a parked request. The theme is read from the client's registration now, not
+     * parked with the request, so the page never shows a theme the registration no longer names.
+     */
+    private Uni<Form> form(PendingAuthorization entry) {
+        AuthorizationRequest request = entry.request();
+        return clients.findByClientId(request.realm(), request.clientId())
+                .map(client -> new Form(entry.transactionId(), entry.csrfToken(), request.redirectUri(),
+                        client == null || client.signInTheme() == null ? null : client.signInTheme().value()));
     }
 
     private static boolean bound(PendingAuthorization entry, String binding) {

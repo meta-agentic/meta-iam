@@ -8,6 +8,7 @@ import dev.tessera.iam.domain.client.ClientAuthMethod;
 import dev.tessera.iam.domain.client.ClientId;
 import dev.tessera.iam.domain.client.ConfidentialClient;
 import dev.tessera.iam.domain.client.PublicClient;
+import dev.tessera.iam.domain.client.SignInTheme;
 import dev.tessera.iam.domain.client.grant.AuthorizationCode;
 import dev.tessera.iam.domain.client.grant.ClientCredentials;
 import dev.tessera.iam.domain.client.grant.GrantType;
@@ -66,6 +67,13 @@ public class FakeClientRepository implements ClientRepositoryPort {
     public static final ClientId CONFIDENTIAL_IDENTITY =
             new ClientId(UUID.fromString("00000000-0000-0000-0000-0000000000c0"));
 
+    /** Public clients whose registrations name a theme: the two the test themes hold, and one they do not. */
+    public static final String ACME_THEME_CLIENT_ID = "acme-spa";
+    public static final String ZENITH_THEME_CLIENT_ID = "zenith-spa";
+    public static final String MISSING_THEME_CLIENT_ID = "lost-theme-spa";
+    /** A public client naming the theme that attacks its own page (SignInPageBrowserIT). */
+    public static final String HOSTILE_THEME_CLIENT_ID = "hostile-theme-spa";
+
     private static final ClientId PUBLIC_IDENTITY =
             new ClientId(UUID.fromString("00000000-0000-0000-0000-0000000000a0"));
     private static final ClientId NO_CODE_IDENTITY =
@@ -108,9 +116,17 @@ public class FakeClientRepository implements ClientRepositoryPort {
                     ? new ConfidentialClient(KEYED_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
                             ClientAuthMethod.PRIVATE_KEY_JWT, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
                     : null;
+            case ACME_THEME_CLIENT_ID -> themed(realm, "acme");
+            case ZENITH_THEME_CLIENT_ID -> themed(realm, "zenith");
+            case MISSING_THEME_CLIENT_ID -> themed(realm, "gone");
+            case HOSTILE_THEME_CLIENT_ID -> themed(realm, "hostile");
             default -> workload(realm, clientId);
         };
         return Uni.createFrom().item(client);
+    }
+
+    private static Client themed(RealmKey realm, String theme) {
+        return new PublicClient(PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, Set.of(), new SignInTheme(theme));
     }
 
     /** A {@link FakeWorkloads} client, registered only in {@link #MACHINE_TENANT}. */
