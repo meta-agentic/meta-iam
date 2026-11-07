@@ -10,6 +10,8 @@ import dev.tessera.iam.domain.oidc.DiscoveryDocument;
 import dev.tessera.iam.domain.oidc.OidcCapabilities;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import jakarta.inject.Inject;
+import java.util.Optional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -53,6 +55,10 @@ public class DiscoveryResource {
     ClientCredentialsConfig clientCredentials;
 
     @Inject
+    @ConfigProperty(name = "iam.tenancy.fixed-tenant")
+    Optional<String> fixedTenant;
+
+    @Inject
     TenantContext tenantContext;
 
     @GET
@@ -86,7 +92,13 @@ public class DiscoveryResource {
         return config.issuer();
     }
 
+    /**
+     * Where the realm is chosen by a request header, one URL answers differently by that header, so
+     * a shared cache must not keep the answer: it is private to one client. With a fixed tenant the
+     * answer is the same for everyone and stays public.
+     */
     private String cacheControl() {
-        return "public, max-age=" + config.jwks().cacheTtlSeconds();
+        boolean fixed = fixedTenant.map(String::trim).filter(value -> !value.isEmpty()).isPresent();
+        return (fixed ? "public" : "private") + ", max-age=" + config.jwks().cacheTtlSeconds();
     }
 }
