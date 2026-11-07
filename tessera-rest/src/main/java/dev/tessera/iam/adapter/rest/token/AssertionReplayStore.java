@@ -71,17 +71,22 @@ final class AssertionReplayStore {
      * @param singleUse whether a {@code jti} that is already live is refused ({@code true}) or
      *                  accepted again until it expires
      * @param global whether the {@code jti} is spent across realms: a trusted external issuer and
-     *               subject name one workload wherever it is presented, while a {@code private_key_jwt}
-     *               client's id names a client within its realm only
+     *               subject name one workload wherever it is presented
+     * @param keyThumbprint the thumbprint of the registered key that verified the assertion, for a
+     *               {@code private_key_jwt} client, or {@code null}. The assertion's audience is the one
+     *               global issuer, so the same assertion verifies in every realm that registers the same
+     *               client id and key; a {@code jti} is therefore spent across realms for that key, and a
+     *               client of another key never shares or burns it. Per-client and per-realm caps still
+     *               count in the presenting realm.
      * @param budget the caps a newly spent {@code jti} counts against; whether it is already live is
      *               answered across both budgets
      * @return {@code true} when it was not live at any endpoint, and neither its client, its realm
      *         nor the store is full in {@code budget}
      */
     synchronized boolean firstUse(RealmKey realm, String issuer, String subject, String jti, boolean singleUse,
-            boolean global, Instant until, Instant now, ReplayBudget budget) {
+            boolean global, String keyThumbprint, Instant until, Instant now, ReplayBudget budget) {
         evictExpired(now);
-        Spent spent = new Spent(global ? null : realm, issuer, subject, jti);
+        Spent spent = new Spent(global || keyThumbprint != null ? null : realm, issuer, subject, keyThumbprint, jti);
         if (live.containsKey(spent)) {
             return !singleUse;
         }
@@ -123,7 +128,7 @@ final class AssertionReplayStore {
      * The replay identity, the same at every endpoint: {@code scope} is the realm, or {@code null}
      * when it is spent across realms.
      */
-    private record Spent(RealmKey scope, String issuer, String subject, String jti) {
+    private record Spent(RealmKey scope, String issuer, String subject, String keyThumbprint, String jti) {
     }
 
     /** One live entry, and the owner whose caps it counts against. */

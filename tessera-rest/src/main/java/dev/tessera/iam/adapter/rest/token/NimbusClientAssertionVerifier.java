@@ -205,7 +205,17 @@ public class NimbusClientAssertionVerifier implements ClientAssertionVerifierPor
                 && (jti == null ? !jtiRequired : !jti.isBlank() && jti.length() <= MAX_JTI_LENGTH
                         && spent.firstUse(realm, trust.issuer(), trust.subject(), jti,
                                 external == null || external.enforceSingleUse(), external != null,
+                                external == null ? thumbprint(key) : null,
                                 claims.getExpirationTime().toInstant().plus(skew), now, budget));
+    }
+
+    /** The registered key's RFC 7638 thumbprint; an unthumbprintable key yields the empty string, which is still spent across realms. */
+    private static String thumbprint(JWK key) {
+        try {
+            return key.computeThumbprint().toString();
+        } catch (JOSEException failed) {
+            return "";
+        }
     }
 
     private boolean verifySignature(SignedJWT jwt, JWSAlgorithm alg, JWK key) {
