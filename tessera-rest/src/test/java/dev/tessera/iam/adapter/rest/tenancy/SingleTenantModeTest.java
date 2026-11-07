@@ -3,6 +3,7 @@ package dev.tessera.iam.adapter.rest.tenancy;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.startsWith;
 import static org.hamcrest.Matchers.containsString;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -42,6 +43,30 @@ class SingleTenantModeTest {
         given().when().get("/.well-known/openid-configuration")
                 .then().statusCode(200)
                 .body("issuer", not(equalTo("")));
+    }
+
+    @Test
+    @DisplayName("discovery keeps its public caching, since the answer is the same for everyone")
+    void discoveryStaysPublic() {
+        given().when().get("/.well-known/openid-configuration")
+                .then().statusCode(200)
+                .header("Cache-Control", startsWith("public, max-age="));
+    }
+
+    @Test
+    @DisplayName("/jwks keeps its public caching")
+    void jwksStaysPublic() {
+        given().when().get("/jwks")
+                .then().statusCode(200)
+                .header("Cache-Control", startsWith("public, max-age="));
+    }
+
+    @Test
+    @DisplayName("/.well-known/jwks.json keeps its public caching")
+    void wellKnownJwksStaysPublic() {
+        given().when().get("/.well-known/jwks.json")
+                .then().statusCode(200)
+                .header("Cache-Control", startsWith("public, max-age="));
     }
 
     @Test
