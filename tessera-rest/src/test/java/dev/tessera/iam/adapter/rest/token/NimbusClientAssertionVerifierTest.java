@@ -91,6 +91,36 @@ class NimbusClientAssertionVerifierTest {
     }
 
     @Test
+    @DisplayName("an assertion accepted in one realm is refused in another realm that registers the same client and key")
+    void assertionIsSpentAcrossRealmsForTheSameKey() {
+        RealmKey otherRealm = new RealmKey(TenantId.generate(), BaselineId.generate());
+        String assertion = signed(c -> c.jwtID("once"));
+        assertThat(verifier.verifyNow(REALM, trust, assertion, NOW)).isTrue();
+        assertThat(verifier.verifyNow(otherRealm, trust, assertion, NOW)).isFalse();
+    }
+
+    @Test
+    @DisplayName("the same assertion is refused in another baseline of the same tenant")
+    void assertionIsSpentAcrossBaselinesOfOneTenant() {
+        RealmKey otherBaseline = new RealmKey(REALM.tenant(), BaselineId.generate());
+        String assertion = signed(c -> c.jwtID("once"));
+        assertThat(verifier.verifyNow(REALM, trust, assertion, NOW)).isTrue();
+        assertThat(verifier.verifyNow(otherBaseline, trust, assertion, NOW)).isFalse();
+    }
+
+    @Test
+    @DisplayName("a client of another key with the same id and jti neither burns nor is burned by the first")
+    void anotherKeyDoesNotShareTheJti() {
+        RealmKey otherRealm = new RealmKey(TenantId.generate(), BaselineId.generate());
+        AssertionTestClient otherKey = new AssertionTestClient();
+        AssertionTrust otherTrust = new AssertionTrust(CLIENT, CLIENT, otherKey.jwks());
+        String own = signed(c -> c.jwtID("shared-jti"));
+        String foreign = otherKey.sign(AssertionTestClient.claims(CLIENT, ISSUER, NOW).jwtID("shared-jti").build());
+        assertThat(verifier.verifyNow(otherRealm, otherTrust, foreign, NOW)).isTrue();
+        assertThat(verifier.verifyNow(REALM, trust, own, NOW)).isTrue();
+    }
+
+    @Test
     @DisplayName("a client at its jti cap refuses only itself, never another tenant's client")
     void replayCapIsPerClient() {
         NimbusClientAssertionVerifier capped = verifier(2, 100, 100);
