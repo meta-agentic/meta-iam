@@ -35,21 +35,16 @@ import java.util.Set;
  * single-use refresh token — issuing a new access + refresh token and invalidating the presented one
  * — with family reuse-detection.
  *
- * <p>Framework-free; the reactive fold is the only control flow. Two invariants govern the tenant
- * handling and are deliberately asymmetric:
+ * <p>Framework-free; the reactive fold is the only control flow. The tenant handling:
  * <ul>
- *   <li><strong>Fail-safe revocation.</strong> The family's authoritative realm is resolved from
- *       server-stored state ({@link RefreshTokenTenantResolverPort}), and rotation/replay-detection
- *       always runs against <em>that</em> realm — so a replayed or stolen token is detected and its
- *       family burned even when the caller sends a wrong or absent tenant header.</li>
- *   <li><strong>Fail-closed issuance.</strong> A new token is minted only when the request's header
- *       tenant equals the authoritative realm, and only when the family belongs to the authenticating
- *       client. Both checks run <em>after</em> {@code consumeAndRotate}, so a mismatched presentation
- *       of the live token still rotates (consumes) it but issues nothing — a self-inflicted denial
- *       that grants no capability, since reaching the rotate branch already required possessing the
- *       live secret. This ordering is deliberate: it keeps fail-safe family revocation working on any
- *       replay signal regardless of who presents the token, at the cost that a party already holding
- *       a stolen token can force its consumption (but obtains no tokens).</li>
+ *   <li><strong>The realm is compared first.</strong> The family's authoritative realm is resolved
+ *       from server-stored state ({@link RefreshTokenTenantResolverPort}). A request addressed to any
+ *       other realm is refused before the client is authenticated and before anything is rotated, so
+ *       presenting a live token at the wrong realm neither spends it nor burns its family: its owner
+ *       refreshes as before.</li>
+ *   <li><strong>Fail-safe revocation.</strong> Once the request is at the family's own realm,
+ *       rotation and replay detection run against that realm, so a replayed token is detected and
+ *       its family burned.</li>
  * </ul>
  * Every failure collapses to {@code invalid_grant} (client-auth failure to {@code invalid_client}),
  * so a caller cannot probe which check failed.
@@ -179,6 +174,11 @@ public final class RefreshService implements RefreshUseCase {
                 return invalidGrant("refresh token is invalid");
             }
             RealmKey authoritativeRealm = owner.get();
+            // A request at another realm is refused before the client is authenticated and before
+            // anything is rotated: the live token is not spent, and the family is not burned.
+            if (!command.requestRealm().equals(authoritativeRealm)) {
+                return invalidGrant("refresh token is invalid");
+            }
 
             // (3) Authenticate the client within the authoritative realm.
             return clients.findByClientId(authoritativeRealm, command.clientId()).flatMap(client -> {
@@ -224,10 +224,6 @@ public final class RefreshService implements RefreshUseCase {
                 if (family == null || !family.clientId().equals(client.id())) {
                     yield invalidGrant("refresh token is invalid");
                 }
-                // Fail-closed issuance: mint only when the header tenant is the family's own.
-                if (!command.requestRealm().equals(authoritativeRealm)) {
-                    yield invalidGrant("refresh token is invalid");
-                }
                 yield issue(command, family, authoritativeRealm, fid, newSecret, now);
             }
             // The predecessor of the live token, again, inside the reuse grace (a concurrent request
@@ -237,7 +233,7 @@ public final class RefreshService implements RefreshUseCase {
             case RefreshDecision.Reissue reissue -> {
                 RefreshTokenFamily family = outcome.family();
                 if (family == null || !family.clientId().equals(client.id())
-                        || !command.requestRealm().equals(authoritativeRealm) || !graceOn()
+                        || !graceOn()
                         || !(client instanceof ConfidentialClient) || family.rotationSalt() == null) {
                     yield invalidGrant("refresh token is invalid");
                 }
