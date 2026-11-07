@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 /**
  * In header mode the realm is chosen by {@code X-Tenant-Id} and {@code X-Baseline-Id}, and discovery
  * and the JWKS are publicly cacheable on one shared URL, so each response must name both headers in
- * {@code Vary}; otherwise a shared cache can serve one tenant's keys to another (ADR-IAM-003 D5).
+ * {@code Vary}; otherwise a shared cache can serve one tenant's keys to another.
  */
 @QuarkusTest
 @DisplayName("Header mode: discovery and JWKS vary on the realm-selecting headers")
