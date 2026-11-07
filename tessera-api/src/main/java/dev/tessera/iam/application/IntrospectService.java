@@ -124,7 +124,7 @@ public final class IntrospectService implements IntrospectUseCase {
         }
         VerifiedAccessToken v = verified.get();
         // Verified signature under the realm's keys; the active decision is expiry, evaluated here.
-        // A token without exp has no lifetime to bound it, so it is never active (ADR-IAM-003 D4b).
+        // A token without exp has no lifetime to bound it, so it is never active.
         if (v.expiresAt() == null || now.getEpochSecond() >= v.expiresAt()) {
             return inactive();
         }
