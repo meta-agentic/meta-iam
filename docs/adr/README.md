@@ -14,6 +14,7 @@ Every tessera decision record lives in this folder, and nowhere else.
 | [008 Sign-in page themes](ADR-IAM-008-sign-in-page-themes.md) | A theme is CSS and static assets, chosen per client with no deployment default, and shipped as a CI-checked, signed layer on the pinned image; tessera refuses to start with an unsigned theme; the page's policy gains same-origin fonts and images; two open items | Accepted |
 | [009 Sender constraint, refresh binding and audience](ADR-IAM-009-sender-constraint-refresh-binding-and-audience.md) | The token rules under each profile of ADR-IAM-010: a client's mode is required and the deployment flag is removed; a refresh proves the family's persisted binding; `aud` is one resource from a list the client registers, a refresh never widens it, and introspection checks it per caller; one operator-only, audited writer; the change is a cut-over with no carry-over; four open items | Proposed |
 | [010 Security floor and tenant profiles](ADR-IAM-010-security-floor-and-tenant-profiles.md) | Every tenant gets a floor no configuration lowers and a strong default, `standard`; a tenant may choose `fapi2`, the FAPI 2.0 Security Profile, which is built and tested but never imposed; each profile has its conformance plan; what no profile covers; four open items | Proposed |
+| [011 Realm chosen by the issuer URL](ADR-IAM-011-realm-chosen-by-issuer-url.md) | A realm is one opaque id, reached by its issuer URL alone; no request header selects a realm | Proposed |
 
 ## Convention
 
