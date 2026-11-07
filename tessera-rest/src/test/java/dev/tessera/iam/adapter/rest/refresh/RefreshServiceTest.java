@@ -137,19 +137,83 @@ class RefreshServiceTest {
         assertThat(signerCalls).hasValue(0);
     }
 
-    @Test
-    @DisplayName("a tenant mismatch mints nothing — the signer is never called (fail-closed issuance)")
-    void tenantMismatchIssuesNothing() {
-        String wire = seedFamily();
-        RealmKey otherRealm =
-                new RealmKey(new TenantId(UUID.randomUUID()), new BaselineId(new UUID(0L, 0L)));
-        // Correct secret, but the request tenant differs from the family's authoritative realm.
-        TokenResult result = service()
-                .redeem(new RefreshCommand(otherRealm, wire, CONF_WIRE, CORRECT_SECRET, null))
+    private RealmKey otherRealm() {
+        return new RealmKey(new TenantId(UUID.randomUUID()), new BaselineId(new UUID(0L, 0L)));
+    }
+
+    private TokenResult redeemAt(RealmKey realm, String wire) {
+        return service()
+                .redeem(new RefreshCommand(realm, wire, CONF_WIRE, CORRECT_SECRET, null))
                 .await().indefinitely();
-        assertThat(result).isInstanceOf(TokenResult.Failed.class);
+    }
+
+    @Test
+    @DisplayName("a token presented at another realm is invalid_grant")
+    void wrongRealmIsInvalidGrant() {
+        TokenResult result = redeemAt(otherRealm(), seedFamily());
         assertThat(((TokenResult.Failed) result).error()).isEqualTo(AuthorizationError.INVALID_GRANT);
-        assertThat(signerCalls).as("no token minted on tenant mismatch").hasValue(0);
+    }
+
+    @Test
+    @DisplayName("a token presented at another realm mints nothing")
+    void wrongRealmMintsNothing() {
+        redeemAt(otherRealm(), seedFamily());
+        assertThat(signerCalls).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("a wrong-realm presentation does not authenticate the client: a wrong secret there is still invalid_grant")
+    void wrongRealmComesBeforeClientAuthentication() {
+        TokenResult result = service()
+                .redeem(new RefreshCommand(otherRealm(), seedFamily(), CONF_WIRE, "WRONG", null))
+                .await().indefinitely();
+        assertThat(((TokenResult.Failed) result).error()).isEqualTo(AuthorizationError.INVALID_GRANT);
+    }
+
+    @Test
+    @DisplayName("after a wrong-realm presentation the token still refreshes at its own realm")
+    void tokenStillRefreshesAtItsOwnRealmAfterAWrongRealmPresentation() {
+        String wire = seedFamily();
+        redeemAt(otherRealm(), wire);
+        assertThat(redeemAt(REALM_A, wire)).isInstanceOf(TokenResult.Issued.class);
+    }
+
+    @Test
+    @DisplayName("a wrong-realm presentation does not burn the family: the next token refreshes too")
+    void familyIsNotBurnedByAWrongRealmPresentation() {
+        String wire = seedFamily();
+        redeemAt(otherRealm(), wire);
+        String next = ((TokenResult.Issued) redeemAt(REALM_A, wire)).refreshToken();
+        assertThat(redeemAt(REALM_A, next)).isInstanceOf(TokenResult.Issued.class);
+    }
+
+    private RefreshService graceService() {
+        return new RefreshService(clients, verifier, signer, ids, store, store,
+                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5),
+                Duration.ofMinutes(5), true, Duration.ofSeconds(30), new byte[32]);
+    }
+
+    @Test
+    @DisplayName("inside the reuse grace, the predecessor at another realm is invalid_grant")
+    void graceWrongRealmIsInvalidGrant() {
+        String wire = seedFamily();
+        RefreshService grace = graceService();
+        grace.redeem(new RefreshCommand(REALM_A, wire, CONF_WIRE, CORRECT_SECRET, null)).await().indefinitely();
+        TokenResult result = grace
+                .redeem(new RefreshCommand(otherRealm(), wire, CONF_WIRE, CORRECT_SECRET, null))
+                .await().indefinitely();
+        assertThat(((TokenResult.Failed) result).error()).isEqualTo(AuthorizationError.INVALID_GRANT);
+    }
+
+    @Test
+    @DisplayName("inside the reuse grace, the predecessor still refreshes at its own realm after a wrong-realm try")
+    void graceStillWorksAtItsOwnRealm() {
+        String wire = seedFamily();
+        RefreshService grace = graceService();
+        grace.redeem(new RefreshCommand(REALM_A, wire, CONF_WIRE, CORRECT_SECRET, null)).await().indefinitely();
+        grace.redeem(new RefreshCommand(otherRealm(), wire, CONF_WIRE, CORRECT_SECRET, null)).await().indefinitely();
+        assertThat(grace.redeem(new RefreshCommand(REALM_A, wire, CONF_WIRE, CORRECT_SECRET, null))
+                .await().indefinitely()).isInstanceOf(TokenResult.Issued.class);
     }
 
     @Test
