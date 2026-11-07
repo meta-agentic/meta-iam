@@ -56,6 +56,12 @@ class IntrospectForgedTokenTest extends AuthorizationCodeFlowSupport {
     }
 
     @Test
+    @DisplayName("a validly signed token with no exp claim is inactive")
+    void noExpClaimIsInactive() {
+        assertInactive(forge("EdDSA", "at+jwt", kid(), payloadWithoutExp(), Sig.REALM_EDDSA));
+    }
+
+    @Test
     @DisplayName("alg:none with an empty signature is inactive")
     void algNoneUnsigned() {
         assertInactive(forge("none", "at+jwt", kid(), payload(ISSUER, ISSUER), Sig.EMPTY));
@@ -221,6 +227,14 @@ class IntrospectForgedTokenTest extends AuthorizationCodeFlowSupport {
             json.append(",\"kid\":\"").append(kid).append('"');
         }
         return B64URL.encodeToString(json.append('}').toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String payloadWithoutExp() {
+        long now = Instant.now().getEpochSecond();
+        String json = "{\"iss\":\"" + ISSUER + "\",\"sub\":\"forged-subject\",\"aud\":\"" + ISSUER
+                + "\",\"client_id\":\"" + FakeClientRepository.PUBLIC_CLIENT_ID
+                + "\",\"iat\":" + now + ",\"jti\":\"" + UUID.randomUUID() + "\",\"scope\":\"openid\"}";
+        return B64URL.encodeToString(json.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String payload(String iss, String aud) {
