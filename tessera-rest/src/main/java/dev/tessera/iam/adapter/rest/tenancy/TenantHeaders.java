@@ -39,7 +39,21 @@ public final class TenantHeaders {
     /** Optional baseline (configuration-version) header (a canonical UUID string). */
     public static final String BASELINE = "X-Baseline-Id";
 
+    /**
+     * The {@code Vary} value for a response whose content depends on the realm: in header mode both
+     * headers select the realm, so a shared cache must key on both.
+     */
+    public static final String VARY_REALM = TENANT + ", " + BASELINE;
+
     private static final BaselineId ZERO_BASELINE = new BaselineId(new UUID(0L, 0L));
+
+    /**
+     * Whether the realm is chosen by the ingress headers: true unless a fixed tenant is configured
+     * (blank counts as unset, as in {@link TenantResolutionFilter}).
+     */
+    public static boolean headerMode(java.util.Optional<String> fixedTenant) {
+        return fixedTenant.map(String::trim).filter(value -> !value.isEmpty()).isEmpty();
+    }
 
     private TenantHeaders() {
     }

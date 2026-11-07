@@ -5,11 +5,14 @@ import dev.tessera.iam.adapter.rest.config.ClientCredentialsConfig;
 import dev.tessera.iam.adapter.rest.config.OidcDiscoveryConfig;
 import dev.tessera.iam.adapter.rest.dto.DiscoveryDto;
 import dev.tessera.iam.adapter.rest.tenancy.TenantContext;
+import dev.tessera.iam.adapter.rest.tenancy.TenantHeaders;
 import dev.tessera.iam.adapter.rest.tenancy.TenantScoped;
 import dev.tessera.iam.domain.oidc.DiscoveryDocument;
 import dev.tessera.iam.domain.oidc.OidcCapabilities;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import jakarta.inject.Inject;
+import java.util.Optional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -53,6 +56,10 @@ public class DiscoveryResource {
     ClientCredentialsConfig clientCredentials;
 
     @Inject
+    @ConfigProperty(name = "iam.tenancy.fixed-tenant")
+    Optional<String> fixedTenant;
+
+    @Inject
     TenantContext tenantContext;
 
     @GET
@@ -72,9 +79,8 @@ public class DiscoveryResource {
         DiscoveryDocument doc = DiscoveryDocument.forIssuer(issuer, OidcCapabilities.enforced(clientCredentials.enabled()));
         DiscoveryDto dto = DiscoveryDto.from(doc);
         return Uni.createFrom().item(
-                RestResponse.ResponseBuilder.ok(dto)
-                        .header("Cache-Control", cacheControl())
-                        .build());
+                withRealmVary(RestResponse.ResponseBuilder.ok(dto)
+                        .header("Cache-Control", cacheControl())).build());
     }
 
     /**
@@ -84,6 +90,11 @@ public class DiscoveryResource {
      */
     private String issuerFor(RealmKey realm) {
         return config.issuer();
+    }
+
+    /** In header mode the realm is chosen by request headers, so a shared cache must key on them. */
+    private <T> RestResponse.ResponseBuilder<T> withRealmVary(RestResponse.ResponseBuilder<T> builder) {
+        return TenantHeaders.headerMode(fixedTenant) ? builder.header("Vary", TenantHeaders.VARY_REALM) : builder;
     }
 
     private String cacheControl() {

@@ -45,6 +45,22 @@ class SingleTenantModeTest {
     }
 
     @Test
+    @DisplayName("discovery carries no Vary on the tenant headers, since they are ignored")
+    void discoveryDoesNotVary() {
+        given().when().get("/.well-known/openid-configuration")
+                .then().statusCode(200)
+                .header("Vary", org.hamcrest.Matchers.nullValue());
+    }
+
+    @Test
+    @DisplayName("the JWKS carries no Vary on the tenant headers, since they are ignored")
+    void jwksDoesNotVary() {
+        given().when().get("/.well-known/jwks.json")
+                .then().statusCode(200)
+                .header("Vary", org.hamcrest.Matchers.nullValue());
+    }
+
+    @Test
     @DisplayName("a malformed X-Tenant-Id is ignored rather than rejected")
     void malformedHeaderIgnored() {
         given().header("X-Tenant-Id", "not-a-uuid")
