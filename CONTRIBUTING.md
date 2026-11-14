@@ -191,3 +191,7 @@ git config core.hooksPath .githooks
 
 The same rules are enforced server-side by the `commit-lint` workflow on every
 pull request, so this step is a convenience that catches issues before you push.
+
+The patterns behind the hooks and the `commit-lint` and `pr-hygiene` workflows are defined
+once, in `scripts/hygiene-patterns.sh`, and every one of them sources that file. Change a rule
+there, never inline; `scripts/test-neutral-metadata.sh` fails if a copy appears anywhere else.

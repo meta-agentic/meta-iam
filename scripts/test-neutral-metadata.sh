@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Regression cases for the neutral-public-metadata rule (bash 3.2 / macOS compatible).
 #
-# Runs the REAL consumers, not a copy of their patterns:
+# The patterns are defined once, in scripts/hygiene-patterns.sh. This runs the REAL consumers,
+# each sourcing that file, not a copy of their patterns:
 #   - .githooks/pre-push                       (commit messages + added diff lines)
+#   - .githooks/commit-msg                     (strips attribution lines)
 #   - commit-lint.yml  "Validate PR commits"   (commit messages, server side)
 #   - pr-hygiene.yml   job "hygiene"           (PR title/body + added diff lines)
 #   - pr-hygiene.yml   job "comment"           (PR/issue comment bodies; gh is stubbed)
 # against throwaway git repos, and asserts that every seeded leak is refused and every clean
-# input passes. A gate that cannot fail is the defect this exists to catch.
+# input passes. A gate that cannot fail is the defect this exists to catch. It also fails if an
+# inline copy of a pattern reappears anywhere in the tree, or a consumer stops sourcing the file.
 #
 # The seeded keys are synthetic (ABC-12, …): the rule matches internal keys by shape, so no
 # real project code needs to appear here. To check the actual project codes of a private
@@ -18,7 +21,9 @@
 set -uo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+patterns="$root/scripts/hygiene-patterns.sh"
 hook="$root/.githooks/pre-push"
+commit_msg_hook="$root/.githooks/commit-msg"
 commit_lint="$root/.github/workflows/commit-lint.yml"
 pr_hygiene="$root/.github/workflows/pr-hygiene.yml"
 zero='0000000000000000000000000000000000000000'
@@ -41,11 +46,13 @@ PY
 }
 
 lint_run="$(extract "$commit_lint" lint 'Validate PR commits' run)" || exit 2
-lint_own="$(extract "$commit_lint" lint 'Validate PR commits' env:OWN_PROJECT)" || exit 2
 hyg_step='PR text and diff must be neutral (no AI attribution, no internal keys)'
 hyg_run="$(extract "$pr_hygiene" hygiene "$hyg_step" run)" || exit 2
 com_run="$(extract "$pr_hygiene" comment 'Hide a comment carrying an AI-attribution marker or internal key' run)" || exit 2
-own="$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["env"]["OWN_PROJECT"], end="")' "$pr_hygiene")" || exit 2
+# The workflows source the patterns from $GITHUB_WORKSPACE; here that is this checkout.
+export GITHUB_WORKSPACE="$root"
+own="$(bash -c '. "$1" && printf %s "$own_project"' _ "$patterns")" || exit 2
+[ -n "$own" ] || { echo "own_project is empty in $patterns" >&2; exit 2; }
 
 # A throwaway repo whose origin/main is one clean commit; prints its path.
 new_repo() {
@@ -91,11 +98,11 @@ run_pre_push() {
 }
 run_commit_lint() {
   (cd "$1" && BASE="$(git rev-parse origin/main)" HEAD="$(git rev-parse HEAD)" \
-    OWN_PROJECT="$lint_own" bash -c "$lint_run")
+    bash -c "$lint_run")
 }
 run_hygiene() {  # <repo> <title> <body>
   (cd "$1" && TITLE="$2" BODY="$3" BASE="$(git rev-parse origin/main)" HEAD="$(git rev-parse HEAD)" \
-    OWN_PROJECT="$own" bash -c "$hyg_run")
+    bash -c "$hyg_run")
 }
 # The comment job never fails the build: it hides the comment through gh. A stub gh records
 # the call, so "block" here means "the comment would have been hidden".
@@ -106,7 +113,7 @@ run_comment() {
   chmod +x "$stub/gh"
   rm -f "$log"
   PATH="$stub:$PATH" BODY="$1" NODE_ID=n HTML_URL=u ISSUE=1 REPO=o/r GH_TOKEN=t \
-    OWN_PROJECT="$own" bash -c "$com_run" || return 3
+    bash -c "$com_run" || return 3
   [ -s "$log" ] && return 1
   return 0
 }
@@ -200,18 +207,51 @@ git -C "$r" commit -q --no-verify -m 'docs: neutral subject'
 expect pass 'large neutral diff' run_hygiene "$r" 'docs: neutral title' "$big_body"
 expect pass 'pre-push large neutral diff' run_pre_push "$r"
 
-# --- the inline copies of has_internal_leak must stay byte-identical (after indentation)
-# until they are single-sourced; behaviour drift outside this corpus would otherwise go unseen.
-copies="$(python3 - "$hook" "$commit_lint" "$pr_hygiene" <<'PY'
-import re, sys, textwrap, hashlib
-found = []
-for p in sys.argv[1:]:
-    for m in re.finditer(r"^( *)# Internal tracker keys are matched by SHAPE.*?^\1\}\n", open(p).read(), re.S | re.M):
-        found.append(hashlib.sha256(textwrap.dedent(m.group(0)).encode()).hexdigest())
-print(len(found), len(set(found)))
-PY
-)"
-expect pass "four identical copies of the key clause (count, distinct: $copies)" test "$copies" = '4 1'
+# --- attribution: a commit message is held to commit-lint's clause, a diff to pr-hygiene's.
+# The hook used to refuse messages the gate accepts, and to pass a diff marker the gate refuses.
+msg_case block 'attribution trailer' 'docs: neutral subject
+
+Co-Authored-By: Claude <noreply@example.com>'
+msg_case pass 'a message may describe an endpoint the text clause names' 'docs: call the api.anthropic.com endpoint'
+text_case block 'the robot marker' 'made by 🤖'
+text_case block 'an endpoint in free text' 'see anthropic.com'
+
+# --- the commit-msg hook strips with commit-lint's clause, from the same file
+msg="$work/COMMIT_EDITMSG"
+printf 'docs: neutral subject\n\nbody line\n\nCo-Authored-By: Claude <noreply@example.com>\nClaude-Session: x\n' > "$msg"
+expect pass 'commit-msg hook accepts a conventional subject' bash "$commit_msg_hook" "$msg"
+expect block 'commit-msg hook strips every attribution line' grep -qiE 'co-authored-by|claude-session' "$msg"
+
+# --- a missing patterns file stops the hooks; it must never make a check pass
+orphan="$work/orphan"
+mkdir -p "$orphan/.githooks"
+cp "$hook" "$commit_msg_hook" "$orphan/.githooks/"
+r="$(new_repo)"
+commit_on "$r" 'docs: deliver ABC-12'
+head="$(git -C "$r" rev-parse HEAD)"
+(cd "$r" && printf 'refs/heads/topic %s refs/heads/topic %s\n' "$head" "$zero" | bash "$orphan/.githooks/pre-push") >/dev/null 2>&1
+rc=$?
+expect pass "pre-push without the patterns file exits 2 (got $rc)" test "$rc" = 2
+printf 'docs: x\n' > "$msg"
+expect block 'commit-msg without the patterns file refuses' bash "$orphan/.githooks/commit-msg" "$msg"
+
+# --- one definition: every consumer sources the file, and no inline copy is left anywhere.
+# The needles are split so that this file does not match itself.
+for consumer in .githooks/pre-push .githooks/commit-msg; do
+  expect pass "$consumer sources the patterns" grep -qF '. "$patterns" ||' "$root/$consumer"
+done
+for workflow in commit-lint.yml pr-hygiene.yml; do
+  n="$(grep -cF '. "$GITHUB_WORKSPACE/scripts/hygiene-patterns.sh" ||' "$root/.github/workflows/$workflow")"
+  want=1; [ "$workflow" = pr-hygiene.yml ] && want=2
+  expect pass "$workflow sources the patterns in every job that checks ($n of $want)" test "$n" = "$want"
+done
+inline="$(cd "$root" && git grep -n -I -F \
+  -e 'public_schemes''=' -e 'tok_re''=' -e 'has_internal_leak''() {' \
+  -e 'co-authored-by:[[:space:]]*''(claude' -e 'co-authored-by:.*''(anthropic' \
+  -e 'generated (with|by) \''[' -e '\.atlassian''\.net' -e 'own_project''=' -e 'OWN_PROJECT'':' \
+  -- . ':(exclude)scripts/hygiene-patterns.sh' ':(exclude)scripts/test-neutral-metadata.sh' 2>/dev/null)"
+[ -z "$inline" ] || printf 'inline copy outside scripts/hygiene-patterns.sh:\n%s\n' "$inline" >&2
+expect pass 'no inline copy of a pattern outside scripts/hygiene-patterns.sh' test -z "$inline"
 
 # --- optional: the real project codes of a private tracker, never committed ---
 for code in ${NEUTRAL_METADATA_CODES:-}; do
