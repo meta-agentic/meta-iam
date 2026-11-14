@@ -6,7 +6,7 @@ name: commit-lint
 #   - carry no AI attribution trailers (Co-Authored-By: Claude…, Claude-Session:, claude.ai/code)
 #   - carry no internal issue-tracker key in the subject or body. With rebase-merge the message
 #     lands verbatim on public main, and a force-push does not purge it. Same clause as
-#     pr-hygiene and the local pre-push hook.
+#     pr-hygiene and the local pre-push hook: all three source scripts/hygiene-patterns.sh.
 on:
   pull_request:
     branches: [main]
@@ -23,50 +23,12 @@ jobs:
           fetch-depth: 0
       - name: Validate PR commits
         env:
-          # This repo's own project code — see the OWN_PROJECT comment in pr-hygiene.yml.
-          OWN_PROJECT: IAM
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          own_project="$OWN_PROJECT"
-          # Internal tracker keys are matched by SHAPE, not by a list of project codes: a literal list
-          # would itself publish the private project codes this gate keeps out of public metadata, and
-          # would silently miss every project added after it was written.
-          #   - upper-case KEY-123 / KEY-S4 anywhere outside an http(s) URL
-          #   - lower-case key-123 only as a path segment (dir/key-123) or a key-123.md file name, so
-          #     case-insensitive coverage does not flag hyphenated prose such as "non-404" or "top-10"
-          #   - ADR-<code>-<n> for any <code> but this repo's own (see own_project above)
-          #   - any *.atlassian.net tenant host
-          # http(s) URLs (other projects' public trackers; file:// and app links stay scanned), version strings (surefire-3.5.6) and the public
-          # identifier schemes that share the KEY-123 shape (SHA-256, UTF-8, RFC-7636 …) pass.
-          public_schemes='ADR|AES|CVE|CWE|ECMA|FIPS|GHSA|HTTP|IEC|IEEE|ISO|JDK|JEP|JSR|NIST|OQ|OWASP|PKCE|PKCS|RFC|SHA|TLS|UTF'
-          b='(^|[^A-Za-z0-9_-])'
-          # A token runs to the end of its word, so PKCE-S256 is read whole and then rejected by the
-          # number/sprint check below; the separator after it stays free to bound the next token.
-          e='[A-Za-z0-9_]*'
-          tok_re="${b}ADR-[A-Z][A-Z0-9]+-[0-9]+|${b}[A-Z][A-Z0-9]+-(S[0-9]{1,2}|[0-9]+)(\.[0-9]+)*${e}|[A-Za-z_]/[a-z][a-z0-9]+-(s[0-9]{1,2}|[0-9]+)(\.[0-9]+)*${e}|${b}[a-z][a-z0-9]+-(s[0-9]{1,2}|[0-9]+)\.md"
-          has_internal_leak() {
-            local tok key
-            # Here-strings, not printf | grep -q: under pipefail an early-exiting grep can SIGPIPE the
-            # writer and turn a match into a pass.
-            grep -qiE '[a-z0-9-]+\.atlassian\.net' <<<"$1" && return 0
-            while IFS= read -r tok; do
-              tok=${tok%.md}
-              [[ $tok =~ -[Ss]?[0-9]+\.[0-9] ]] && continue                  # version string
-              key=$(printf '%s' "$tok" | sed -E 's#[^A-Za-z0-9]$##; s#^.*[^A-Za-z0-9-]##' | tr '[:lower:]' '[:upper:]')
-              # a key ends in a number or a sprint id (S plus one or two digits): PKCE-S256 does not
-              [[ $key =~ ^ADR- || $key =~ -(S[0-9]{1,2}|[0-9]+)(\.[0-9]+)*$ ]] || continue
-              case "$key" in
-                "") continue ;;
-                "ADR-${own_project}-"*) continue ;;
-                ADR-*-*) return 0 ;;
-              esac
-              [[ ${key%%-*} =~ ^($public_schemes)$ ]] && continue
-              return 0
-            done < <(sed -E 's#%2[Ff]#/#g; s#[Hh][Tt][Tt][Pp][Ss]?://[^[:space:]<>()"]*##g' <<<"$1" | grep -oE "$tok_re")
-            return 1
-          }
+          # The patterns are defined once, for every consumer (scripts/hygiene-patterns.sh).
+          . "$GITHUB_WORKSPACE/scripts/hygiene-patterns.sh" || { echo "::error::cannot read scripts/hygiene-patterns.sh"; exit 2; }
           re='^(feat|fix|chore|docs|ci|build|refactor|test|perf|style|revert)(\([a-z0-9._/-]+\))?!?: .+'
           fail=0
           for sha in $(git rev-list "$BASE..$HEAD"); do
@@ -87,7 +49,7 @@ jobs:
             if grep -qiE 'anthropic\.com|^claude$|<claude@' <<<"$ae$an"; then
               echo "::error::[$sha] AI-attributed author: $an <$ae>"; fail=1
             fi
-            if grep -qiE '(co-authored-by:.*(anthropic|claude))|(claude-session:)|(claude\.ai/code)|(generated (with|by) \[claude)' <<<"$body"; then
+            if grep -qiE "$hygiene_ai_commit" <<<"$body"; then
               echo "::error::[$sha] AI attribution trailer present in commit body"; fail=1
             fi
           done

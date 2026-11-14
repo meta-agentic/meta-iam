@@ -8,9 +8,12 @@
 set -uo pipefail
 msg_file="$1"
 
-# --- 1) strip AI noise lines ---
+# --- 1) strip AI noise lines: commit-lint's own clause, from the one definition ---
+patterns="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/hygiene-patterns.sh"
+# shellcheck source=../scripts/hygiene-patterns.sh
+. "$patterns" || { echo "✗ cannot read $patterns" >&2; exit 1; }
 tmp="${msg_file}.tmp.$$"
-grep -viE '(^co-authored-by:.*(anthropic|claude))|(^claude-session:)|(claude\.ai/code)|(generated (with|by) \[claude)' "$msg_file" > "$tmp" 2>/dev/null || cp "$msg_file" "$tmp"
+grep -viE "$hygiene_ai_commit" "$msg_file" > "$tmp" 2>/dev/null || cp "$msg_file" "$tmp"
 # collapse 3+ blank lines and drop trailing blanks
 awk 'BEGIN{b=0} /^[[:space:]]*$/{b++; next} {while(b-->0 && NR>1) print ""; b=0; print} END{}' "$tmp" > "$msg_file" 2>/dev/null || mv "$tmp" "$msg_file"
 rm -f "$tmp"
