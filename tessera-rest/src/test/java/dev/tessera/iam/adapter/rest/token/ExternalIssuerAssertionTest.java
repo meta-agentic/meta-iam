@@ -13,11 +13,17 @@ import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -152,5 +158,53 @@ class ExternalIssuerAssertionTest {
         String other = "system:serviceaccount:orders:shipping";
         assertThat(verify(verifier, AssertionTrust.ofIssuer(CLUSTER, other),
                 token(c -> c.subject(other).jwtID("c")))).as("another subject of the same issuer").isTrue();
+    }
+
+    @Test
+    @DisplayName("a registration naming an unconfigured issuer is refused and logged once, at its first assertion; a configured issuer is never logged")
+    void unlistedIssuerIsLoggedOnceAtFirstUse() {
+        Logger logger = Logger.getLogger(NimbusClientAssertionVerifier.class.getName());
+        List<LogRecord> records = new ArrayList<>();
+        Handler capture = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                if (record.getLevel().intValue() >= Level.WARNING.intValue()) {
+                    records.add(record);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        logger.addHandler(capture);
+        try {
+            NimbusClientAssertionVerifier verifier = verifier(Duration.ofHours(1), false, 10);
+            String unlisted = "https://unconfigured.example";
+            AssertionTrust unlistedTrust = AssertionTrust.ofIssuer(unlisted, SA);
+
+            assertThat(verify(verifier, trust, token(c -> c))).as("a configured issuer").isTrue();
+            assertThat(records).as("a configured issuer is not logged").isEmpty();
+
+            for (int attempt = 0; attempt < 3; attempt++) {
+                assertThat(verify(verifier, unlistedTrust, token(c -> c.issuer(unlisted))))
+                        .as("an unconfigured issuer, attempt " + attempt).isFalse();
+            }
+            assertThat(records).as("one warning per unconfigured issuer, not one per attempt").hasSize(1);
+            assertThat(formatted(records.get(0))).contains(unlisted)
+                    .contains("iam.client-assertion.trusted-issuers");
+        } finally {
+            logger.removeHandler(capture);
+        }
+    }
+
+    private static String formatted(LogRecord record) {
+        Object[] parameters = record.getParameters();
+        String message = record.getMessage();
+        return parameters == null ? message : String.format(message, parameters) + " " + message;
     }
 }
