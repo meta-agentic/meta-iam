@@ -120,7 +120,9 @@ class ConsentFlowTest extends AuthorizationCodeFlowSupport {
                 .header("Content-Security-Policy", org.hamcrest.Matchers.endsWith("form-action 'self' https://client.example"))
                 .body(containsString("action=\"signin/consent\""))
                 .body(containsString(FakeClientRepository.PUBLIC_CLIENT_ID))
-                .body(containsString("<li>openid</li>"))
+                // openid only means "sign in", which the heading says: not listed.
+                .body(containsString("It asks for no further access."))
+                .body(not(containsString("<li>openid")))
                 .body(not(containsString("code=")));
         assertThat(asked.getCookie(SessionCookies.NAME)).as("the sign-in itself succeeded").isNotBlank();
 
@@ -211,5 +213,44 @@ class ConsentFlowTest extends AuthorizationCodeFlowSupport {
                 .header("Location", org.hamcrest.Matchers.nullValue());
         // The sign-in form still works for this transaction.
         page(started).then().statusCode(200).body(containsString("name=\"password\""));
+    }
+
+    private Response consentPageFor(String scope, String acceptLanguage) {
+        String subject = UUID.randomUUID().toString();
+        consents.requireConsent(subject);
+        String verifier = newVerifier();
+        Started started = park(authorize(FakeClientRepository.PUBLIC_CLIENT_ID, REDIRECT_URI, scope,
+                "state-scopes", null, s256(verifier), "S256", subject), verifier);
+        var req = given().config(noFollow())
+                .header("X-Tenant-Id", TENANT)
+                .cookie(SignInCookies.NAME, started.binding())
+                .queryParam("txn", started.transactionId());
+        if (acceptLanguage != null) {
+            req.header("Accept-Language", acceptLanguage);
+        }
+        return req.when().get("/signin");
+    }
+
+    @Test
+    @DisplayName("each standard scope is described in plain language with its name beside it; openid is not listed; an unknown scope shows its name")
+    void scopesInPlainLanguage() {
+        consentPageFor("openid profile email address phone offline_access custom.scope", null)
+                .then().statusCode(200)
+                .body(containsString("<li>Your name and basic profile details <span class=\"consent-scope-name\">profile</span></li>"))
+                .body(containsString("<li>Your email address <span class=\"consent-scope-name\">email</span></li>"))
+                .body(containsString("<li>Your postal address <span class=\"consent-scope-name\">address</span></li>"))
+                .body(containsString("<li>Your phone number <span class=\"consent-scope-name\">phone</span></li>"))
+                .body(containsString("<li>Keep access while you are not using it <span class=\"consent-scope-name\">offline_access</span></li>"))
+                .body(containsString("<li>custom.scope</li>"))
+                .body(not(containsString("openid</")))
+                .body(not(containsString("no further access")));
+    }
+
+    @Test
+    @DisplayName("a browser asking for a language tessera has no bundle for gets English")
+    void unsupportedLanguageFallsBackToEnglish() {
+        consentPageFor("openid email", "de-DE,de;q=0.9")
+                .then().statusCode(200)
+                .body(containsString("Your email address"));
     }
 }
