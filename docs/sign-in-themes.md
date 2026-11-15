@@ -61,7 +61,7 @@ Client registrations cannot be read at boot, so a missing theme is found when a 
 
 ## The contract a theme builds on
 
-`theme.css` loads after tessera's neutral stylesheet, so it can override any rule there. These are stable, and a change to them is a breaking change:
+`theme.css` loads after tessera's neutral stylesheet, so it can override any rule there. The sign-in form and the consent step that follows it for a user who has not consented to the client (ADR-IAM-004 D1) load the same theme and share the selectors below. These are stable, and a change to them is a breaking change:
 
 | Selector | What it is |
 |---|---|
@@ -71,7 +71,10 @@ Client registrations cannot be read at boot, so a missing theme is found when a 
 | `.error` | The message after a failed sign-in, shown with `role="alert"` |
 | `form` | The form |
 | `label`, `input` | The fields; `#username` and `#password` name each one |
-| `button` | The submit button |
+| `button` | The submit button; on the consent step, Allow (`button[value=allow]`) |
+| `button.secondary` | On the consent step, Deny (`button[value=deny]`) |
+| `.consent-client` | On the consent step, the paragraph naming the client that asks |
+| `.consent-scopes` | On the consent step, the paragraph and the `ul` listing the requested scopes, one `li` each |
 
 The neutral stylesheet's custom properties can also be overridden on `:root`: `--bg`, `--card`, `--text`, `--muted`, `--border`, `--accent`, `--accent-text` and `--error`. It sets `color-scheme: light dark` and different values under `prefers-color-scheme: dark`, so a theme that sets colours should cover both.
 
