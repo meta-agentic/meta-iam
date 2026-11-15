@@ -30,6 +30,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -100,7 +101,8 @@ public class SignInResource {
     }
 
     /** The consent step ({@code templates/SignInResource/consent.html}). */
-    record consent(String transactionId, String csrfToken, String clientId, List<String> scopes, String theme)
+    record consent(String transactionId, String csrfToken, String clientId, List<ConsentScopes.Line> scopes,
+            String theme)
             implements TemplateInstance {
     }
 
@@ -116,11 +118,12 @@ public class SignInResource {
     @Produces(MediaType.TEXT_HTML)
     @Operation(operationId = "signInPage", summary = "Show the sign-in form for a pending authorization request")
     public Uni<Response> show(
+            @Context HttpHeaders headers,
             @QueryParam("txn") String transactionId, @CookieParam(SignInCookies.NAME) String binding) {
         return signIn.show(tenantContext.realm(), transactionId, binding)
                 .map(result -> switch (result) {
                     case FormResult.Shown shown -> form(Response.Status.OK, shown.form(), false);
-                    case FormResult.ConsentShown asked -> consentPage(asked.form());
+                    case FormResult.ConsentShown asked -> consentPage(asked.form(), headers);
                     case FormResult.Unavailable unavailable -> unavailable(Response.Status.BAD_REQUEST);
                 });
     }
@@ -131,6 +134,7 @@ public class SignInResource {
     @Operation(operationId = "signIn", summary = "Sign in and answer the pending authorization request")
     public Uni<Response> submit(
             @Context UriInfo uriInfo,
+            @Context HttpHeaders headers,
             @HeaderParam("Sec-Fetch-Site") String fetchSite,
             @CookieParam(SignInCookies.NAME) String binding,
             @FormParam("txn") String transactionId,
@@ -153,7 +157,7 @@ public class SignInResource {
                     .header("Cache-Control", "no-store")
                     .header("Referrer-Policy", REFERRER_POLICY)
                     .build();
-            case SubmitResult.ConsentNeeded needed -> Response.fromResponse(consentPage(needed.form()))
+            case SubmitResult.ConsentNeeded needed -> Response.fromResponse(consentPage(needed.form(), headers))
                     // Signed in: the session starts now, whatever the user answers next.
                     .cookie(SessionCookies.issue(needed.sessionId().toString(), login.sessionTtl().toSeconds()))
                     .build();
@@ -204,18 +208,19 @@ public class SignInResource {
                 .build();
     }
 
-    private Response consentPage(ConsentForm form) {
+    private Response consentPage(ConsentForm form, HttpHeaders headers) {
+        List<ConsentScopes.Line> lines = ConsentScopes.lines(form.scopes(), headers.getAcceptableLanguages());
         return switch (themes.choose(form.theme())) {
-            case SignInThemes.Choice.Themed themed -> consentPage(form, themed.name());
-            case SignInThemes.Choice.Neutral neutral -> consentPage(form, null);
+            case SignInThemes.Choice.Themed themed -> consentPage(form, lines, themed.name());
+            case SignInThemes.Choice.Neutral neutral -> consentPage(form, lines, null);
             case SignInThemes.Choice.Refused refused -> page(Response.Status.SERVICE_UNAVAILABLE,
                     new refused().render(), SignInPagePolicy.closed());
         };
     }
 
-    private static Response consentPage(ConsentForm form, String theme) {
+    private static Response consentPage(ConsentForm form, List<ConsentScopes.Line> lines, String theme) {
         return page(Response.Status.OK,
-                new consent(form.transactionId(), form.csrfToken(), form.clientId(), form.scopes(), theme).render(),
+                new consent(form.transactionId(), form.csrfToken(), form.clientId(), lines, theme).render(),
                 SignInPagePolicy.form(form.redirectUri()));
     }
 

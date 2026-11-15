@@ -74,7 +74,8 @@ Client registrations cannot be read at boot, so a missing theme is found when a 
 | `button` | The submit button; on the consent step, Allow (`button[value=allow]`) |
 | `button.secondary` | On the consent step, Deny (`button[value=deny]`) |
 | `.consent-client` | On the consent step, the paragraph naming the client that asks |
-| `.consent-scopes` | On the consent step, the paragraph and the `ul` listing the requested scopes, one `li` each |
+| `.consent-scopes` | On the consent step, the paragraph and the `ul` listing the requested scopes, one `li` each: a plain-language description, or the scope's name when tessera has none |
+| `.consent-scope-name` | On the consent step, the scope's own name, after its description |
 
 The neutral stylesheet's custom properties can also be overridden on `:root`: `--bg`, `--card`, `--text`, `--muted`, `--border`, `--accent`, `--accent-text` and `--error`. It sets `color-scheme: light dark` and different values under `prefers-color-scheme: dark`, so a theme that sets colours should cover both.
 

@@ -18,8 +18,12 @@
 {#else}
 <p class="consent-scopes">It asks for:</p>
 <ul class="consent-scopes">
-{#for scope in scopes}
-<li>{scope}</li>
+{#for line in scopes}
+{#if line.description}
+<li>{line.description} <span class="consent-scope-name">{line.name}</span></li>
+{#else}
+<li>{line.name}</li>
+{/if}
 {/for}
 </ul>
 {/if}

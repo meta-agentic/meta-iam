@@ -87,4 +87,7 @@ button.secondary {
 
 ul.consent-scopes { margin: 0; padding-left: 20px; }
 
+/* The scope's own name, small, after its plain-language description. */
+.consent-scope-name { display: block; font-size: 0.75em; color: var(--muted); }
+
 .error { color: var(--error); font-weight: 500; }
