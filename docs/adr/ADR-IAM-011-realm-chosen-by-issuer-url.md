@@ -2,10 +2,18 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** |
+| Status | **Approved** (2026-11-15): the direction binds new work; the body may still be amended, each change dated below. Accepted once its open items close. |
 | Date | 2026-11-07 |
 | Amends, once accepted | [ADR-IAM-003](ADR-IAM-003-tenant-tier-and-path-scoped-issuer.md) D1, D2, D3, D4 and D5; [ADR-IAM-002](ADR-IAM-002-standalone-public-origin.md) D1 consequence 7 and its rejected alternative on the path; [ADR-IAM-005](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) D1 consequence 2 |
 | Relates to | [ADR-IAM-007](ADR-IAM-007-token-exchange-and-agent-delegation-profile.md) (`act.iss`), [ADR-IAM-009](ADR-IAM-009-sender-constraint-refresh-binding-and-audience.md) (audience and the operator's declaration), [ADR-IAM-010](ADR-IAM-010-security-floor-and-tenant-profiles.md) (profiles; `fapi2` waits for per-realm issuers) |
+
+
+## Status log
+
+| Date | Change |
+|---|---|
+| 2026-11-07 | Proposed. |
+| 2026-11-15 | Approved by the maintainers. Not Accepted: the open items below remain. Decision 3 (no realm-selecting header, D3) was decided on 2026-11-07. The order of work below is filed as items. The amendments it names to ADR-IAM-002, -003 and -005 take effect when it is Accepted. |
 
 ---
 

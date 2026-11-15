@@ -2,9 +2,17 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** |
+| Status | **Approved** (2026-11-15): the direction binds new work; the body may still be amended, each change dated below. Accepted once its open items close. |
 | Date | 2026-11-04 |
 | Relates to | [ADR-IAM-003](ADR-IAM-003-tenant-tier-and-path-scoped-issuer.md) (where a tenant's settings live; one issuer and discovery document per realm), [ADR-IAM-004](ADR-IAM-004-end-user-session-and-consent.md) (MFA; see this record's D8), [ADR-IAM-005](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) (conformance; see this record's D7), [ADR-IAM-006](ADR-IAM-006-standalone-provider-for-many-sites-and-agents.md) (amended by this record's D1), [ADR-IAM-007](ADR-IAM-007-token-exchange-and-agent-delegation-profile.md) (the rule for configuration points, followed by this record's D2), [ADR-IAM-009](ADR-IAM-009-sender-constraint-refresh-binding-and-audience.md) (the token rules for each profile) |
+
+
+## Status log
+
+| Date | Change |
+|---|---|
+| 2026-11-04 | Proposed. |
+| 2026-11-15 | Approved by the maintainers. Not Accepted: the open items below remain. The FAPI 2.0 conformance plan in CI (D7) is to be scheduled now, against a `fapi2` tenant. |
 
 ---
 
