@@ -2,9 +2,19 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** |
+| Status | **Approved** (2026-11-15): the direction binds new work; the body may still be amended, each change dated below. Accepted once the open items close and ADR-IAM-010 is accepted. |
 | Date | 2026-11-04 |
 | Relates to | [ADR-IAM-010](ADR-IAM-010-security-floor-and-tenant-profiles.md) (the floor and the tenant profiles this record applies), [ADR-IAM-003](ADR-IAM-003-tenant-tier-and-path-scoped-issuer.md) (realm claims and issuer; D4b ratified by this record), [ADR-IAM-006](ADR-IAM-006-standalone-provider-for-many-sites-and-agents.md) (many relying parties), [ADR-IAM-007](ADR-IAM-007-token-exchange-and-agent-delegation-profile.md) (delegation; this record supplies the refresh path its D2 and D5 require), [threat model](../security/threat-model.md) row 14 and [the `iss`/`aud` decision](../security/threat-model.md#the-introspection-iss--aud-decision), [RFC 9700 checklist](../security/rfc9700-checklist.md) |
+
+
+## Status log
+
+| Date | Change |
+|---|---|
+| 2026-11-04 | Proposed. |
+| 2026-11-15 | Approved by the maintainers, with the two amendments below. Not Accepted: open items 1 to 3 remain, and ADR-IAM-010 is still Proposed. |
+| 2026-11-15 | D5 amended: the operator's declaration may also create a client (D5, "Creating a client"). |
+| 2026-11-15 | Open item 5 added: before the cut-over of D4 ships, a back-end-for-frontend relying party on the code flow is proven to send DPoP proofs against tessera. |
 
 ---
 
@@ -184,6 +194,8 @@ An authorization code or a pending sign-in in flight that lacks the new fields, 
 
 **Decision.** One declaration states a tenant's security profile (ADR-IAM-010 D2) and a client's `sender_constraint`, `user_audiences`, `resource_identifier` and `grants_valid_after`. One application use case writes the client's values and applies every write refusal of D1 and D3, and the profile is written as the bullet below says. `grants_valid_after` is a time: a family created before it is refused at refresh, which is how an operator revokes a whole client without a network endpoint. Its first caller is a declaration the operator owns, keyed by tenant, baseline and client id, applied at startup. It updates those values on an existing tenant or client and nothing else. There is no network endpoint. A provisioning API, when one is built, calls the same use case and brings its own authentication. Every change appends a row to a history table (tenant, client, column, old value, new value, database role, time), written by a database trigger on those columns, so a raw SQL write is recorded too. The application's database role holds no `UPDATE` or `DELETE` on the history table, as ADR-IAM-003 D1 consequence 3 does for its record, and a test pins that.
 
+**Creating a client (amended 2026-11-15).** The declaration may also name a client that does not exist yet. The same use case then creates it in that realm, with the fields `client_credentials` needs: grants, scopes, audiences, the authentication method and, for a workload-identity client, the assertion issuer and subject. The same write refusals apply, and the same trigger records the creation in the history table. A secret is never declared, so a created client authenticates by a key set or by a workload identity. A declared client that already exists is updated within the columns above and is never replaced. This is how an operator registers more than the one client first boot provisions, such as one gateway client per tenant, without raw SQL.
+
 **What it means.**
 - A tenant's profile sits in the tenant registry, which the application role cannot write (ADR-IAM-003 D1 consequence 3), so that part of the declaration is applied by a separate step as the administrative role, which also creates a declared tenant's row. The application reads it and never holds those credentials.
 - The operator is whoever controls the deployment's configuration. A restart is the act. That holds on a managed platform with no shell, and it adds nothing to the public origin of ADR-IAM-002.
@@ -237,3 +249,4 @@ For the maintainers. Each has a recommendation, and the record holds under eithe
 2. **DPoP key rotation on a grant.** Strict continuity costs a sign-in per grant on a key change, and needs a shared key across instances. *Recommendation:* strict now. If a relying party needs rotation, add a rebind by amendment, outside the delegation paths.
 3. **The audience check at introspection.** The maintainers' answer of 2026-10-29 was to echo; this record also compares, because RFC 7662 §4 makes the check a MUST once tokens are per resource. *Recommendation:* accept it. The alternative is echo only, recorded as a deviation from §4, with every gateway checking `aud` itself.
 4. **Review status.** An earlier draft had an adversarial round and an independent security review. This version was rewritten against ADR-IAM-010, and an independent security review's findings are applied here. The last rework, to per-tenant profiles, had its own review. None of it is implemented. Acceptance is the maintainers' decision.
+5. **A back-end-for-frontend on the code flow sends DPoP proofs (added 2026-11-15).** RFC 9449 lets a confidential client prove possession on the code flow, and D4 makes `dpop` the mode of every client not on mTLS. A relying party whose library sends no proof by itself, such as a Quarkus OIDC back end (ADR-IAM-010 D4 consequence 2), would fail closed on the day of the cut-over. *Decision:* the cut-over does not ship until such a relying party is shown sending proofs against tessera, through its library's request-filter hook or equivalent, and runs as `dpop`. It is not declared `none` to get past the cut-over.
