@@ -78,4 +78,13 @@ button {
   cursor: pointer;
 }
 
+/* The consent step: the decline is a quieter button beside the main one. */
+button.secondary {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+ul.consent-scopes { margin: 0; padding-left: 20px; }
+
 .error { color: var(--error); font-weight: 500; }

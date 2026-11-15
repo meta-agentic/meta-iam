@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tessera.iam.application.port.in.AuthorizeUseCase.AuthorizeResult;
 import dev.tessera.iam.application.port.out.AuthorizationCodeStorePort;
 import dev.tessera.iam.application.port.out.ClientRepositoryPort;
+import dev.tessera.iam.application.port.out.ConsentStorePort;
 import dev.tessera.iam.application.port.out.OpaqueIdentifierPort;
 import dev.tessera.iam.domain.authcode.AuthorizationError;
 import dev.tessera.iam.domain.authcode.AuthorizationGrant;
@@ -45,6 +46,8 @@ class AuthorizationServiceTest {
     private static final String CHALLENGE = "a".repeat(43);
 
     private final AtomicInteger storeCount = new AtomicInteger();
+    /** The scopes sub-1 consented to; {@code null} means no consent at all. */
+    private Set<String> consented = Set.of("openid");
 
     private AuthorizationService service(Client resolved) {
         ClientRepositoryPort clients =
@@ -87,7 +90,18 @@ class AuthorizationServiceTest {
                 return "fixed-sign-in-secret";
             }
         };
-        return new AuthorizationService(clients, codeStore, ids,
+        ConsentStorePort consents = new ConsentStorePort() {
+            @Override
+            public Uni<Boolean> hasConsent(RealmKey realm, String subjectId, ClientId clientId, Set<String> scopes) {
+                return Uni.createFrom().item(consented != null && consented.containsAll(scopes));
+            }
+
+            @Override
+            public Uni<Void> grant(RealmKey realm, String subjectId, ClientId clientId, Set<String> scopes) {
+                throw new AssertionError("authorize never records consent");
+            }
+        };
+        return new AuthorizationService(clients, consents, codeStore, ids,
                 Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
                 Duration.ofMinutes(1));
     }
@@ -141,5 +155,34 @@ class AuthorizationServiceTest {
                 .await().indefinitely();
         assertThat(result).isInstanceOf(AuthorizeResult.Failed.class);
         assertThat(storeCount).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("no consent: ConsentRequired and NO code, first-party or not")
+    void noConsentMintsNoCode() {
+        consented = null;
+        AuthorizeResult result = authorize(publicClient(Set.of(REGISTERED)), REGISTERED);
+        assertThat(result).isInstanceOf(AuthorizeResult.ConsentRequired.class);
+        assertThat(storeCount).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("consent to fewer scopes than requested: ConsentRequired and NO code")
+    void narrowerConsentMintsNoCode() {
+        consented = Set.of("openid");
+        AuthorizationRequest wider = new AuthorizationRequest(REALM, CLIENT_ID, REGISTERED,
+                Set.of("openid", "profile"), "state-1", "nonce-1", CodeChallenge.s256(CHALLENGE));
+        AuthorizeResult result = service(publicClient(Set.of(REGISTERED))).authorize(wider, "sub-1")
+                .await().indefinitely();
+        assertThat(result).isInstanceOf(AuthorizeResult.ConsentRequired.class);
+        assertThat(storeCount).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("an unregistered redirect_uri is refused before consent is even asked")
+    void redirectCheckPrecedesConsent() {
+        consented = null;
+        AuthorizeResult result = authorize(publicClient(Set.of(REGISTERED)), "https://c.example/evil");
+        assertThat(result).isInstanceOf(AuthorizeResult.Failed.class);
     }
 }

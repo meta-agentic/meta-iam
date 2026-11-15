@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Allow access</title>
+<link rel="stylesheet" href="assets/signin.css">
+{#if theme}
+<link rel="stylesheet" href="assets/themes/{theme}/theme.css">
+{/if}
+</head>
+<body>
+<main>
+<h1>Allow access</h1>
+<p class="consent-client"><strong>{clientId}</strong> is asking to sign you in.</p>
+{#if scopes.isEmpty}
+<p class="consent-scopes">It asks for no further access.</p>
+{#else}
+<p class="consent-scopes">It asks for:</p>
+<ul class="consent-scopes">
+{#for scope in scopes}
+<li>{scope}</li>
+{/for}
+</ul>
+{/if}
+<form method="post" action="signin/consent">
+<input type="hidden" name="txn" value="{transactionId}">
+<input type="hidden" name="csrf" value="{csrfToken}">
+<button type="submit" name="decision" value="allow" autofocus>Allow</button>
+<button type="submit" name="decision" value="deny" class="secondary">Deny</button>
+</form>
+</main>
+</body>
+</html>

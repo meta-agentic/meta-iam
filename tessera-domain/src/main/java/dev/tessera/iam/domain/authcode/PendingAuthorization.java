@@ -26,6 +26,9 @@ import java.time.Instant;
  *                      or blank)
  * @param createdAt     when the request was accepted (never {@code null})
  * @param expiresAt     when it stops being usable; strictly after {@code createdAt}
+ * @param subjectId     the signed-in user waiting at the consent step, or {@code null} while the
+ *                      request still waits for a sign-in. Set only by tessera after the user
+ *                      authenticated; never read from a request.
  */
 public record PendingAuthorization(
         String transactionId,
@@ -33,7 +36,19 @@ public record PendingAuthorization(
         String csrfToken,
         String bindingHash,
         Instant createdAt,
-        Instant expiresAt) {
+        Instant expiresAt,
+        String subjectId) {
+
+    /** A request waiting for a sign-in: no subject yet. */
+    public PendingAuthorization(
+            String transactionId,
+            AuthorizationRequest request,
+            String csrfToken,
+            String bindingHash,
+            Instant createdAt,
+            Instant expiresAt) {
+        this(transactionId, request, csrfToken, bindingHash, createdAt, expiresAt, null);
+    }
 
     public PendingAuthorization {
         if (transactionId == null || transactionId.isBlank()) {
@@ -54,6 +69,26 @@ public record PendingAuthorization(
         if (!expiresAt.isAfter(createdAt)) {
             throw new IllegalArgumentException("PendingAuthorization expiresAt must be after createdAt");
         }
+        if (subjectId != null && subjectId.isBlank()) {
+            throw new IllegalArgumentException("PendingAuthorization subjectId must be null or not blank");
+        }
+    }
+
+    /**
+     * @param subject the user who signed in (never {@code null} or blank)
+     * @return the same request, its secrets and lifetime unchanged, now waiting for that user's
+     *         consent
+     */
+    public PendingAuthorization awaitingConsentOf(String subject) {
+        if (subject == null || subject.isBlank()) {
+            throw new IllegalArgumentException("subject must not be blank");
+        }
+        return new PendingAuthorization(transactionId, request, csrfToken, bindingHash, createdAt, expiresAt, subject);
+    }
+
+    /** @return {@code true} once the user has signed in and the request waits for consent. */
+    public boolean awaitsConsent() {
+        return subjectId != null;
     }
 
     /** @return the realm the request runs within. */

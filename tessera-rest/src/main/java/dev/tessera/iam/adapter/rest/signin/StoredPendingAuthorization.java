@@ -37,7 +37,8 @@ record StoredPendingAuthorization(
         long createdAtEpochSecond,
         int createdAtNano,
         long expiresAtEpochSecond,
-        int expiresAtNano) {
+        int expiresAtNano,
+        String subjectId) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -59,7 +60,8 @@ record StoredPendingAuthorization(
                 pending.createdAt().getEpochSecond(),
                 pending.createdAt().getNano(),
                 pending.expiresAt().getEpochSecond(),
-                pending.expiresAt().getNano());
+                pending.expiresAt().getNano(),
+                pending.subjectId());
         try {
             return MAPPER.writeValueAsString(stored);
         } catch (JsonProcessingException e) {
@@ -92,7 +94,8 @@ record StoredPendingAuthorization(
                     stored.csrfToken,
                     stored.bindingHash,
                     Instant.ofEpochSecond(stored.createdAtEpochSecond, stored.createdAtNano),
-                    Instant.ofEpochSecond(stored.expiresAtEpochSecond, stored.expiresAtNano));
+                    Instant.ofEpochSecond(stored.expiresAtEpochSecond, stored.expiresAtNano),
+                    stored.subjectId);
         } catch (IllegalArgumentException | NullPointerException e) {
             return null;
         }

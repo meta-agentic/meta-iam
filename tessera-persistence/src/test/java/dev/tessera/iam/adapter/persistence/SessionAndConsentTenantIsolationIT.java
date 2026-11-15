@@ -178,4 +178,35 @@ class SessionAndConsentTenantIsolationIT {
                 () -> consents.hasConsent(ownerRealm, "sub-owner", client, Set.of("openid")),
                 Boolean.TRUE);
     }
+
+    @Test
+    @RunOnVertxContext
+    @DisplayName("a second consent for the same user and client replaces the first, and no consent covers nothing")
+    void secondConsentReplacesTheFirst(UniAsserter asserter) {
+        UUID tenant = UUID.randomUUID();
+        UUID baseline = UUID.randomUUID();
+        RealmKey realm = realm(tenant, baseline);
+        ClientId client = ClientId.generate();
+
+        asserter.execute(() -> users.persist(tenant, user(tenant, baseline, "sub-twice")));
+        // No consent row: even a request naming no scope is not covered (fail closed).
+        asserter.assertEquals(() -> consents.hasConsent(realm, "sub-twice", client, Set.of()), Boolean.FALSE);
+
+        asserter.execute(() -> consents.grant(realm, "sub-twice", client, Set.of("openid")));
+        asserter.assertEquals(
+                () -> consents.hasConsent(realm, "sub-twice", client, Set.of("openid", "profile")),
+                Boolean.FALSE);
+
+        // The second grant used to violate uq_consent_pair; now it replaces the scopes.
+        asserter.execute(() -> consents.grant(realm, "sub-twice", client, Set.of("openid", "profile")));
+        asserter.assertEquals(
+                () -> consents.hasConsent(realm, "sub-twice", client, Set.of("openid", "profile")),
+                Boolean.TRUE);
+
+        // A narrower later grant replaces, it does not merge.
+        asserter.execute(() -> consents.grant(realm, "sub-twice", client, Set.of("openid")));
+        asserter.assertEquals(
+                () -> consents.hasConsent(realm, "sub-twice", client, Set.of("profile")),
+                Boolean.FALSE);
+    }
 }
