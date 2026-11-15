@@ -51,7 +51,7 @@ class ReadRetryScopeArchTest {
             "DbRefreshTokenStore.revokeFamiliesOf",
             "AuthSessionRepository.persist",
             "AuthSessionRepository.updateState",
-            "ConsentRepository.persist",
+            "ConsentRepository.upsert",
             "CredentialRepository.persist",
             "OAuthClientRepository.persist",
             "UserRepository.persist",

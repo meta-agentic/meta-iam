@@ -9,10 +9,14 @@ import dev.tessera.iam.adapter.rest.session.SessionCookies;
 import dev.tessera.iam.adapter.rest.tenancy.TenantContext;
 import dev.tessera.iam.adapter.rest.tenancy.TenantScoped;
 import dev.tessera.iam.application.port.in.SignInUseCase;
+import dev.tessera.iam.application.port.in.SignInUseCase.ConsentForm;
+import dev.tessera.iam.application.port.in.SignInUseCase.Decision;
+import dev.tessera.iam.application.port.in.SignInUseCase.DecisionResult;
 import dev.tessera.iam.application.port.in.SignInUseCase.Form;
 import dev.tessera.iam.application.port.in.SignInUseCase.FormResult;
 import dev.tessera.iam.application.port.in.SignInUseCase.Submission;
 import dev.tessera.iam.application.port.in.SignInUseCase.SubmitResult;
+import dev.tessera.iam.domain.authcode.AuthorizationError;
 import io.quarkus.qute.TemplateInstance;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
@@ -29,6 +33,8 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
+import java.net.URI;
+import java.util.List;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
@@ -47,6 +53,12 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
  * Where the redirect goes is never read from the post: it is the redirect URI validated when
  * the request was parked.
  *
+ * <p>When the signed-in user has not consented to the client for every requested scope, the
+ * page shows the consent step instead of redirecting, under the same transaction and binding
+ * cookie. Its form posts to {@code POST /signin/consent}: allow records the consent and answers
+ * with a code, deny answers with {@code error=access_denied}. A request that arrived at
+ * {@code /authorize} already signed in is sent straight to that step.
+ *
  * <p>Every response is {@code no-store} and carries the page's own Content-Security-Policy
  * ({@link SignInPagePolicy}); the server-wide policy is configured to skip this path.
  */
@@ -58,6 +70,8 @@ public class SignInResource {
 
     private static final String HTML = MediaType.TEXT_HTML + ";charset=UTF-8";
     private static final String SAME_ORIGIN = "same-origin";
+    private static final String ALLOW = "allow";
+    private static final String DENY = "deny";
     /**
      * Not the server-wide {@code no-referrer}: under that a browser posts this page's form with
      * {@code Origin: null}, which the CORS filter refuses. This keeps the real origin on a post to
@@ -85,6 +99,11 @@ public class SignInResource {
     record signin(String transactionId, String csrfToken, boolean failed, String theme) implements TemplateInstance {
     }
 
+    /** The consent step ({@code templates/SignInResource/consent.html}). */
+    record consent(String transactionId, String csrfToken, String clientId, List<String> scopes, String theme)
+            implements TemplateInstance {
+    }
+
     /** The page for a sign-in that cannot continue ({@code templates/SignInResource/unavailable.html}). */
     record unavailable() implements TemplateInstance {
     }
@@ -101,6 +120,7 @@ public class SignInResource {
         return signIn.show(tenantContext.realm(), transactionId, binding)
                 .map(result -> switch (result) {
                     case FormResult.Shown shown -> form(Response.Status.OK, shown.form(), false);
+                    case FormResult.ConsentShown asked -> consentPage(asked.form());
                     case FormResult.Unavailable unavailable -> unavailable(Response.Status.BAD_REQUEST);
                 });
     }
@@ -133,10 +153,70 @@ public class SignInResource {
                     .header("Cache-Control", "no-store")
                     .header("Referrer-Policy", REFERRER_POLICY)
                     .build();
+            case SubmitResult.ConsentNeeded needed -> Response.fromResponse(consentPage(needed.form()))
+                    // Signed in: the session starts now, whatever the user answers next.
+                    .cookie(SessionCookies.issue(needed.sessionId().toString(), login.sessionTtl().toSeconds()))
+                    .build();
             case SubmitResult.Denied denied -> form(Response.Status.UNAUTHORIZED, denied.form(), true);
             case SubmitResult.Unavailable unavailable -> unavailable(Response.Status.BAD_REQUEST);
             case SubmitResult.Refused refused -> unavailable(Response.Status.BAD_REQUEST);
         });
+    }
+
+    @POST
+    @Path("consent")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    @Operation(operationId = "signInConsent", summary = "Allow or deny the client a pending authorization request asks for")
+    public Uni<Response> decide(
+            @Context UriInfo uriInfo,
+            @HeaderParam("Sec-Fetch-Site") String fetchSite,
+            @CookieParam(SignInCookies.NAME) String binding,
+            @FormParam("txn") String transactionId,
+            @FormParam("csrf") String csrfToken,
+            @FormParam("decision") String decision) {
+        // The same origin rule as the sign-in post: only this page's own form may answer.
+        if (fetchSite != null && !SAME_ORIGIN.equals(fetchSite)) {
+            return Uni.createFrom().item(unavailable(Response.Status.FORBIDDEN));
+        }
+        if (!ALLOW.equals(decision) && !DENY.equals(decision)) {
+            return Uni.createFrom().item(unavailable(Response.Status.BAD_REQUEST));
+        }
+        Decision answer = new Decision(
+                tenantContext.realm(), transactionId, binding, csrfToken, ALLOW.equals(decision));
+        return signIn.decide(answer).map(result -> switch (result) {
+            case DecisionResult.Completed completed -> answered(uriInfo, AuthorizationResponses.success(
+                    completed.redirectUri(), completed.code(), completed.state(), oidc.issuer()));
+            case DecisionResult.Declined declined -> answered(uriInfo, AuthorizationResponses.error(
+                    declined.redirectUri(), AuthorizationError.ACCESS_DENIED, "the user denied the request",
+                    declined.state(), oidc.issuer()));
+            case DecisionResult.Unavailable unavailable -> unavailable(Response.Status.BAD_REQUEST);
+            case DecisionResult.Refused refused -> unavailable(Response.Status.BAD_REQUEST);
+        });
+    }
+
+    /** {@code 303} back to the client, and the transaction's binding cookie cleared. */
+    private static Response answered(UriInfo uriInfo, URI location) {
+        return Response.seeOther(location)
+                .cookie(SignInCookies.clear(uriInfo))
+                .header("Cache-Control", "no-store")
+                .header("Referrer-Policy", REFERRER_POLICY)
+                .build();
+    }
+
+    private Response consentPage(ConsentForm form) {
+        return switch (themes.choose(form.theme())) {
+            case SignInThemes.Choice.Themed themed -> consentPage(form, themed.name());
+            case SignInThemes.Choice.Neutral neutral -> consentPage(form, null);
+            case SignInThemes.Choice.Refused refused -> page(Response.Status.SERVICE_UNAVAILABLE,
+                    new refused().render(), SignInPagePolicy.closed());
+        };
+    }
+
+    private static Response consentPage(ConsentForm form, String theme) {
+        return page(Response.Status.OK,
+                new consent(form.transactionId(), form.csrfToken(), form.clientId(), form.scopes(), theme).render(),
+                SignInPagePolicy.form(form.redirectUri()));
     }
 
     private Response form(Response.Status status, Form form, boolean failed) {

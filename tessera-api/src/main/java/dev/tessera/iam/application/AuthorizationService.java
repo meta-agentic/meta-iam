@@ -1,13 +1,15 @@
 package dev.tessera.iam.application;
 
-import io.smallrye.mutiny.Uni;
+
 import dev.tessera.iam.application.port.in.AuthorizeUseCase;
 import dev.tessera.iam.application.port.out.AuthorizationCodeStorePort;
 import dev.tessera.iam.application.port.out.ClientRepositoryPort;
+import dev.tessera.iam.application.port.out.ConsentStorePort;
 import dev.tessera.iam.application.port.out.OpaqueIdentifierPort;
 import dev.tessera.iam.domain.authcode.AuthorizationGrant;
 import dev.tessera.iam.domain.authcode.AuthorizationRequest;
 import dev.tessera.iam.domain.client.Client;
+import io.smallrye.mutiny.Uni;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,10 +23,16 @@ import java.time.Instant;
  * the security-relevant decisions (registered redirect URI, allowed grant) are made by
  * {@link ClientRequestCheck}, which the sign-in path applies too, and the
  * code/clock/randomness effects are confined to the injected ports.
+ *
+ * <p>A code is issued only for a subject who consented to the client for every requested
+ * scope ({@link ConsentStorePort}). Every client is asked, first-party ones included; nothing
+ * marks a client as pre-consented. Without consent the result is
+ * {@link AuthorizeResult.ConsentRequired} and no code exists.
  */
 public final class AuthorizationService implements AuthorizeUseCase {
 
     private final ClientRepositoryPort clients;
+    private final ConsentStorePort consents;
     private final AuthorizationCodeStorePort codeStore;
     private final OpaqueIdentifierPort identifiers;
     private final Clock clock;
@@ -32,11 +40,13 @@ public final class AuthorizationService implements AuthorizeUseCase {
 
     public AuthorizationService(
             ClientRepositoryPort clients,
+            ConsentStorePort consents,
             AuthorizationCodeStorePort codeStore,
             OpaqueIdentifierPort identifiers,
             Clock clock,
             Duration codeTtl) {
         this.clients = requireNonNull(clients, "clients");
+        this.consents = requireNonNull(consents, "consents");
         this.codeStore = requireNonNull(codeStore, "codeStore");
         this.identifiers = requireNonNull(identifiers, "identifiers");
         this.clock = requireNonNull(clock, "clock");
@@ -61,7 +71,10 @@ public final class AuthorizationService implements AuthorizeUseCase {
                     if (refusal != null) {
                         return Uni.createFrom().item((AuthorizeResult) refusal);
                     }
-                    return issueCode(request, client, subjectId);
+                    return consents.hasConsent(request.realm(), subjectId, client.id(), request.scopes())
+                            .flatMap(consented -> consented
+                                    ? issueCode(request, client, subjectId)
+                                    : Uni.createFrom().item((AuthorizeResult) new AuthorizeResult.ConsentRequired()));
                 });
     }
 

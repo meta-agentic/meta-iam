@@ -7,8 +7,10 @@ import dev.tessera.iam.application.port.in.LoginUseCase;
 import dev.tessera.iam.application.port.in.LoginUseCase.LoginResult;
 import dev.tessera.iam.application.port.in.SignInUseCase;
 import dev.tessera.iam.application.port.out.ClientRepositoryPort;
+import dev.tessera.iam.application.port.out.ConsentStorePort;
 import dev.tessera.iam.application.port.out.OpaqueIdentifierPort;
 import dev.tessera.iam.application.port.out.PendingAuthorizationStorePort;
+import dev.tessera.iam.domain.authcode.AuthorizationError;
 import dev.tessera.iam.domain.authcode.AuthorizationRequest;
 import dev.tessera.iam.domain.authcode.PendingAuthorization;
 import dev.tessera.iam.domain.tenancy.RealmKey;
@@ -20,6 +22,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 
 /**
  * Application service for the hosted sign-in page. Framework-free, wired by the adapter like
@@ -34,12 +37,20 @@ import java.util.Base64;
  * from the browser holding the form never reaches password verification. The transaction is
  * consumed only after the credential verifies, so a mistyped password can be retried, and
  * consumed atomically, so one sign-in answers the request at most once.
+ *
+ * <p>When the user has not consented to the client for every requested scope,
+ * {@link AuthorizeUseCase} issues no code. The request then waits at the consent step under the
+ * same transaction, now carrying the signed-in subject, and {@link #decide} answers it: allow
+ * records the consent and goes through {@link AuthorizeUseCase} again, deny answers with
+ * {@code access_denied}. The subject is never read from a post; it is the one that signed in,
+ * or the one {@code /authorize} found in the session.
  */
 public final class SignInService implements SignInUseCase {
 
     private static final Base64.Encoder B64URL = Base64.getUrlEncoder().withoutPadding();
 
     private final ClientRepositoryPort clients;
+    private final ConsentStorePort consents;
     private final AuthorizeUseCase authorize;
     private final LoginUseCase login;
     private final PendingAuthorizationStorePort pending;
@@ -49,6 +60,7 @@ public final class SignInService implements SignInUseCase {
 
     public SignInService(
             ClientRepositoryPort clients,
+            ConsentStorePort consents,
             AuthorizeUseCase authorize,
             LoginUseCase login,
             PendingAuthorizationStorePort pending,
@@ -56,6 +68,7 @@ public final class SignInService implements SignInUseCase {
             Clock clock,
             Duration lifetime) {
         this.clients = requireNonNull(clients, "clients");
+        this.consents = requireNonNull(consents, "consents");
         this.authorize = requireNonNull(authorize, "authorize");
         this.login = requireNonNull(login, "login");
         this.pending = requireNonNull(pending, "pending");
@@ -79,11 +92,30 @@ public final class SignInService implements SignInUseCase {
                         return Uni.createFrom().item(
                                 (BeginResult) new BeginResult.Refused(refusal.error(), refusal.description()));
                     }
-                    return park(request);
+                    return park(request, null);
                 });
     }
 
-    private Uni<BeginResult> park(AuthorizationRequest request) {
+    @Override
+    public Uni<BeginResult> beginConsent(AuthorizationRequest request, String subjectId) {
+        if (request == null) {
+            throw new IllegalArgumentException("request must not be null");
+        }
+        if (isBlank(subjectId)) {
+            throw new IllegalArgumentException("subjectId must not be blank");
+        }
+        return clients.findByClientId(request.realm(), request.clientId())
+                .flatMap(client -> {
+                    AuthorizeResult.Failed refusal = ClientRequestCheck.refusal(client, request);
+                    if (refusal != null) {
+                        return Uni.createFrom().item(
+                                (BeginResult) new BeginResult.Refused(refusal.error(), refusal.description()));
+                    }
+                    return park(request, subjectId);
+                });
+    }
+
+    private Uni<BeginResult> park(AuthorizationRequest request, String subjectId) {
         Instant now = clock.instant();
         String binding = identifiers.newSignInSecret();
         PendingAuthorization entry = new PendingAuthorization(
@@ -92,7 +124,8 @@ public final class SignInService implements SignInUseCase {
                 identifiers.newSignInSecret(),
                 hash(binding),
                 now,
-                now.plus(lifetime));
+                now.plus(lifetime),
+                subjectId);
         return pending.store(entry)
                 .replaceWith(new BeginResult.Started(entry.transactionId(), binding, lifetime));
     }
@@ -103,9 +136,14 @@ public final class SignInService implements SignInUseCase {
             return Uni.createFrom().item(new FormResult.Unavailable());
         }
         return pending.find(realm, transactionId)
-                .flatMap(entry -> entry != null && bound(entry, binding) && !entry.isExpired(clock.instant())
-                        ? form(entry).map(form -> (FormResult) new FormResult.Shown(form))
-                        : Uni.createFrom().item(new FormResult.Unavailable()));
+                .flatMap(entry -> {
+                    if (entry == null || !bound(entry, binding) || entry.isExpired(clock.instant())) {
+                        return Uni.createFrom().item((FormResult) new FormResult.Unavailable());
+                    }
+                    return entry.awaitsConsent()
+                            ? consentForm(entry).map(form -> (FormResult) new FormResult.ConsentShown(form))
+                            : form(entry).map(form -> (FormResult) new FormResult.Shown(form));
+                });
     }
 
     @Override
@@ -145,14 +183,92 @@ public final class SignInService implements SignInUseCase {
             }
             AuthorizationRequest request = consumed.request();
             return authorize.authorize(request, authenticated.subjectId())
-                    .map(result -> switch (result) {
-                        case AuthorizeResult.Issued issued -> (SubmitResult) new SubmitResult.Completed(
-                                request.redirectUri(), issued.code(), issued.state(),
-                                authenticated.sessionId());
-                        case AuthorizeResult.Failed failed ->
-                                new SubmitResult.Refused(failed.error(), failed.description());
+                    .flatMap(result -> switch (result) {
+                        case AuthorizeResult.Issued issued -> Uni.createFrom().item(
+                                (SubmitResult) new SubmitResult.Completed(request.redirectUri(), issued.code(),
+                                        issued.state(), authenticated.sessionId()));
+                        case AuthorizeResult.Failed failed -> Uni.createFrom().item(
+                                (SubmitResult) new SubmitResult.Refused(failed.error(), failed.description()));
+                        case AuthorizeResult.ConsentRequired required -> {
+                            // Park the same request again, now for this user's consent: same
+                            // transaction, token, binding and expiry, so the browser holding the
+                            // form is the only one that can answer.
+                            PendingAuthorization waiting = consumed.awaitingConsentOf(authenticated.subjectId());
+                            yield pending.store(waiting)
+                                    .chain(() -> consentForm(waiting))
+                                    .map(form -> (SubmitResult) new SubmitResult.ConsentNeeded(
+                                            form, authenticated.sessionId()));
+                        }
                     });
         });
+    }
+
+    @Override
+    public Uni<DecisionResult> decide(Decision decision) {
+        if (decision == null) {
+            throw new IllegalArgumentException("decision must not be null");
+        }
+        RealmKey realm = decision.realm();
+        if (realm == null || isBlank(decision.transactionId()) || isBlank(decision.binding())
+                || isBlank(decision.csrfToken())) {
+            return Uni.createFrom().item(new DecisionResult.Unavailable());
+        }
+        return pending.find(realm, decision.transactionId()).flatMap(entry -> {
+            if (entry == null
+                    || entry.isExpired(clock.instant())
+                    || !entry.awaitsConsent()
+                    || !bound(entry, decision.binding())
+                    || !sameSecret(entry.csrfToken(), decision.csrfToken())) {
+                return Uni.createFrom().item((DecisionResult) new DecisionResult.Unavailable());
+            }
+            return pending.consume(realm, entry.transactionId()).flatMap(consumed -> {
+                if (consumed == null) {
+                    // Another post of the same answer won the consume.
+                    return Uni.createFrom().item((DecisionResult) new DecisionResult.Unavailable());
+                }
+                AuthorizationRequest request = consumed.request();
+                if (!decision.allow()) {
+                    return Uni.createFrom().item(
+                            (DecisionResult) new DecisionResult.Declined(request.redirectUri(), request.state()));
+                }
+                return allow(consumed);
+            });
+        });
+    }
+
+    private Uni<DecisionResult> allow(PendingAuthorization consumed) {
+        AuthorizationRequest request = consumed.request();
+        String subject = consumed.subjectId();
+        return clients.findByClientId(request.realm(), request.clientId()).flatMap(client -> {
+            AuthorizeResult.Failed refusal = ClientRequestCheck.refusal(client, request);
+            if (refusal != null) {
+                return Uni.createFrom().item(
+                        (DecisionResult) new DecisionResult.Refused(refusal.error(), refusal.description()));
+            }
+            // Record first, then answer through the one path that issues codes, which checks
+            // the consent again: nothing here mints a code by itself.
+            return consents.grant(request.realm(), subject, client.id(), request.scopes())
+                    .flatMap(recorded -> authorize.authorize(request, subject))
+                    .map(result -> switch (result) {
+                        case AuthorizeResult.Issued issued ->
+                                (DecisionResult) new DecisionResult.Completed(
+                                        request.redirectUri(), issued.code(), issued.state());
+                        case AuthorizeResult.Failed failed ->
+                                new DecisionResult.Refused(failed.error(), failed.description());
+                        case AuthorizeResult.ConsentRequired required ->
+                                new DecisionResult.Refused(AuthorizationError.ACCESS_DENIED,
+                                        "the consent could not be recorded");
+                    });
+        });
+    }
+
+    /** The consent step for a request waiting for consent; the theme is read now, as for the form. */
+    private Uni<ConsentForm> consentForm(PendingAuthorization entry) {
+        AuthorizationRequest request = entry.request();
+        return clients.findByClientId(request.realm(), request.clientId())
+                .map(client -> new ConsentForm(entry.transactionId(), entry.csrfToken(), request.redirectUri(),
+                        client == null || client.signInTheme() == null ? null : client.signInTheme().value(),
+                        request.clientId(), List.copyOf(request.scopes())));
     }
 
     private Uni<SubmitResult> denied(PendingAuthorization entry) {

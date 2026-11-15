@@ -67,17 +67,19 @@ public class UseCaseProducer {
     @ApplicationScoped
     AuthorizeUseCase authorizeUseCase(
             ClientRepositoryPort clients,
+            ConsentStorePort consents,
             AuthorizationCodeStorePort codeStore,
             OpaqueIdentifierPort identifiers,
             Clock clock,
             AuthFlowConfig authFlow) {
-        return new AuthorizationService(clients, codeStore, identifiers, clock, authFlow.codeTtl());
+        return new AuthorizationService(clients, consents, codeStore, identifiers, clock, authFlow.codeTtl());
     }
 
     @Produces
     @ApplicationScoped
     SignInUseCase signInUseCase(
             ClientRepositoryPort clients,
+            ConsentStorePort consents,
             AuthorizeUseCase authorize,
             LoginUseCase login,
             PendingAuthorizationStorePort pending,
@@ -85,7 +87,7 @@ public class UseCaseProducer {
             Clock clock,
             AuthFlowConfig authFlow) {
         return new SignInService(
-                clients, authorize, login, pending, identifiers, clock, authFlow.signInTtl());
+                clients, consents, authorize, login, pending, identifiers, clock, authFlow.signInTtl());
     }
 
     @Produces

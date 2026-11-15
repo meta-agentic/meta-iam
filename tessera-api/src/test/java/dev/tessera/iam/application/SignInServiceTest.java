@@ -8,10 +8,13 @@ import dev.tessera.iam.application.port.in.AuthorizeUseCase.AuthorizeResult;
 import dev.tessera.iam.application.port.in.LoginUseCase;
 import dev.tessera.iam.application.port.in.LoginUseCase.LoginResult;
 import dev.tessera.iam.application.port.in.SignInUseCase.BeginResult;
+import dev.tessera.iam.application.port.in.SignInUseCase.Decision;
+import dev.tessera.iam.application.port.in.SignInUseCase.DecisionResult;
 import dev.tessera.iam.application.port.in.SignInUseCase.FormResult;
 import dev.tessera.iam.application.port.in.SignInUseCase.Submission;
 import dev.tessera.iam.application.port.in.SignInUseCase.SubmitResult;
 import dev.tessera.iam.application.port.out.ClientRepositoryPort;
+import dev.tessera.iam.application.port.out.ConsentStorePort;
 import dev.tessera.iam.application.port.out.OpaqueIdentifierPort;
 import dev.tessera.iam.application.port.out.PendingAuthorizationStorePort;
 import dev.tessera.iam.domain.authcode.AuthorizationError;
@@ -59,6 +62,8 @@ class SignInServiceTest {
     private final Map<String, PendingAuthorization> entries = new HashMap<>();
     private final AtomicInteger logins = new AtomicInteger();
     private final List<String> authorizedSubjects = new ArrayList<>();
+    /** Recorded consents, subject to scopes; the default test subject has consented to openid. */
+    private final Map<String, Set<String>> consents = new HashMap<>();
     private Client client = new PublicClient(
             ClientId.generate(), REALM, Set.<GrantType>of(new AuthorizationCode()), Set.of(REGISTERED));
     private int secrets;
@@ -88,9 +93,26 @@ class SignInServiceTest {
                 (realm, clientId) -> Uni.createFrom().item(CLIENT_ID.equals(clientId) ? client : null);
         AuthorizeUseCase authorize = (request, subjectId) -> {
             authorizedSubjects.add(subjectId);
-            return Uni.createFrom().item(client.redirectUris().contains(request.redirectUri())
+            if (!client.redirectUris().contains(request.redirectUri())) {
+                return Uni.createFrom().item(new AuthorizeResult.Failed(AuthorizationError.INVALID_REQUEST, "gone", false));
+            }
+            Set<String> granted = consents.get(subjectId);
+            return Uni.createFrom().item(granted != null && granted.containsAll(request.scopes())
                     ? new AuthorizeResult.Issued("code-1", request.state())
-                    : new AuthorizeResult.Failed(AuthorizationError.INVALID_REQUEST, "gone", false));
+                    : new AuthorizeResult.ConsentRequired());
+        };
+        ConsentStorePort consentStore = new ConsentStorePort() {
+            @Override
+            public Uni<Boolean> hasConsent(RealmKey realm, String subjectId, ClientId clientId, Set<String> scopes) {
+                Set<String> granted = consents.get(subjectId);
+                return Uni.createFrom().item(granted != null && granted.containsAll(scopes));
+            }
+
+            @Override
+            public Uni<Void> grant(RealmKey realm, String subjectId, ClientId clientId, Set<String> scopes) {
+                consents.put(subjectId, Set.copyOf(scopes));
+                return Uni.createFrom().voidItem();
+            }
         };
         LoginUseCase login = (realm, username, password) -> {
             logins.incrementAndGet();
@@ -124,7 +146,7 @@ class SignInServiceTest {
                 return "secret-" + (++secrets);
             }
         };
-        return new SignInService(clients, authorize, login, store, ids, clock, LIFETIME);
+        return new SignInService(clients, consentStore, authorize, login, store, ids, clock, LIFETIME);
     }
 
     private static AuthorizationRequest request(String clientId, String redirectUri) {
@@ -136,6 +158,14 @@ class SignInServiceTest {
         BeginResult result = service().begin(request(CLIENT_ID, REGISTERED)).await().indefinitely();
         assertThat(result).isInstanceOf(BeginResult.Started.class);
         return (BeginResult.Started) result;
+    }
+
+    {
+        consents.put(SUBJECT, Set.of("openid"));
+    }
+
+    private DecisionResult decide(String txn, String binding, String csrf, boolean allow) {
+        return service().decide(new Decision(REALM, txn, binding, csrf, allow)).await().indefinitely();
     }
 
     private String csrf(BeginResult.Started started) {
@@ -266,6 +296,106 @@ class SignInServiceTest {
     void submissionHidesPassword() {
         assertThat(new Submission(REALM, "t", "b", "c", USERNAME, PASSWORD).toString())
                 .doesNotContain(PASSWORD);
+    }
+
+    @Test
+    @DisplayName("signed in without consent: no code, the request waits for this user's consent under the same transaction")
+    void signInWithoutConsentWaitsForIt() {
+        consents.clear();
+        BeginResult.Started started = begin();
+        String csrf = csrf(started);
+
+        SubmitResult result = submit(started.transactionId(), started.binding(), csrf, USERNAME, PASSWORD);
+
+        assertThat(result).isInstanceOfSatisfying(SubmitResult.ConsentNeeded.class, needed -> {
+            assertThat(needed.form().transactionId()).isEqualTo(started.transactionId());
+            assertThat(needed.form().clientId()).isEqualTo(CLIENT_ID);
+            assertThat(needed.form().scopes()).containsExactly("openid");
+            assertThat(needed.sessionId()).isNotNull();
+        });
+        PendingAuthorization waiting = entries.get(started.transactionId());
+        assertThat(waiting.subjectId()).isEqualTo(SUBJECT);
+        assertThat(waiting.csrfToken()).isEqualTo(csrf);
+        assertThat(service().show(REALM, started.transactionId(), started.binding()).await().indefinitely())
+                .isInstanceOf(FormResult.ConsentShown.class);
+    }
+
+    @Test
+    @DisplayName("allow records the consent and answers once with a code; a replayed answer is unavailable")
+    void allowRecordsAndAnswersOnce() {
+        consents.clear();
+        BeginResult.Started started = begin();
+        String csrf = csrf(started);
+        submit(started.transactionId(), started.binding(), csrf, USERNAME, PASSWORD);
+
+        DecisionResult first = decide(started.transactionId(), started.binding(), csrf, true);
+        DecisionResult replay = decide(started.transactionId(), started.binding(), csrf, true);
+
+        assertThat(first).isInstanceOfSatisfying(DecisionResult.Completed.class, completed -> {
+            assertThat(completed.code()).isEqualTo("code-1");
+            assertThat(completed.redirectUri()).isEqualTo(REGISTERED);
+        });
+        assertThat(consents.get(SUBJECT)).containsExactly("openid");
+        assertThat(replay).isInstanceOf(DecisionResult.Unavailable.class);
+    }
+
+    @Test
+    @DisplayName("deny answers with access_denied and records nothing")
+    void denyRecordsNothing() {
+        consents.clear();
+        BeginResult.Started started = begin();
+        String csrf = csrf(started);
+        submit(started.transactionId(), started.binding(), csrf, USERNAME, PASSWORD);
+
+        DecisionResult result = decide(started.transactionId(), started.binding(), csrf, false);
+
+        assertThat(result).isInstanceOfSatisfying(DecisionResult.Declined.class, declined -> {
+            assertThat(declined.redirectUri()).isEqualTo(REGISTERED);
+            assertThat(declined.state()).isEqualTo("state-1");
+        });
+        assertThat(consents).isEmpty();
+        assertThat(entries).isEmpty();
+    }
+
+    @Test
+    @DisplayName("an answer needs the binding and the token, and a request that has not signed in cannot be answered")
+    void answerNeedsBindingTokenAndASignedInUser() {
+        consents.clear();
+        BeginResult.Started started = begin();
+        String csrf = csrf(started);
+
+        // Before the sign-in there is no subject: an allow posted now must not create one.
+        assertThat(decide(started.transactionId(), started.binding(), csrf, true))
+                .isInstanceOf(DecisionResult.Unavailable.class);
+        assertThat(consents).isEmpty();
+
+        submit(started.transactionId(), started.binding(), csrf, USERNAME, PASSWORD);
+        assertThat(decide(started.transactionId(), "another-browser", csrf, true))
+                .isInstanceOf(DecisionResult.Unavailable.class);
+        assertThat(decide(started.transactionId(), started.binding(), "forged", true))
+                .isInstanceOf(DecisionResult.Unavailable.class);
+        assertThat(consents).isEmpty();
+        assertThat(entries).containsKey(started.transactionId());
+    }
+
+    @Test
+    @DisplayName("a signed-in request without consent is parked for that user, after the client checks")
+    void beginConsentParksForTheUser() {
+        consents.clear();
+        BeginResult refused = service().beginConsent(request(CLIENT_ID, "https://evil.example/cb"), SUBJECT)
+                .await().indefinitely();
+        assertThat(refused).isInstanceOf(BeginResult.Refused.class);
+        assertThat(entries).isEmpty();
+
+        BeginResult begun = service().beginConsent(request(CLIENT_ID, REGISTERED), SUBJECT).await().indefinitely();
+        assertThat(begun).isInstanceOfSatisfying(BeginResult.Started.class, started -> {
+            assertThat(entries.get(started.transactionId()).subjectId()).isEqualTo(SUBJECT);
+            assertThat(service().show(REALM, started.transactionId(), started.binding()).await().indefinitely())
+                    .isInstanceOf(FormResult.ConsentShown.class);
+            DecisionResult allowed = decide(started.transactionId(), started.binding(),
+                    entries.get(started.transactionId()).csrfToken(), true);
+            assertThat(allowed).isInstanceOf(DecisionResult.Completed.class);
+        });
     }
 
     private static final class MutableClock extends Clock {

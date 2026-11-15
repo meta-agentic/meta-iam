@@ -35,7 +35,18 @@ public interface AuthorizeUseCase {
      * The outcome of an authorization request: a sealed pair of success (an issued code to
      * redirect with, plus the round-tripped {@code state}) or failure (an OAuth error).
      */
-    sealed interface AuthorizeResult permits AuthorizeResult.Issued, AuthorizeResult.Failed {
+    sealed interface AuthorizeResult
+            permits AuthorizeResult.Issued, AuthorizeResult.Failed, AuthorizeResult.ConsentRequired {
+
+        /**
+         * The client and redirect URI validated, but the user has not consented to this client
+         * for every requested scope. No code was issued. The adapter sends the browser to the
+         * consent step of the hosted sign-in page, which asks, records the answer and comes back
+         * here; a code is issued only on this path, never beside it.
+         */
+        record ConsentRequired() implements AuthorizeResult {
+        }
+
 
         /**
          * Success: redirect to the request's {@code redirect_uri} with this {@code code}

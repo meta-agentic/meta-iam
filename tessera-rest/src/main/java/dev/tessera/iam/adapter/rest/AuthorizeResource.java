@@ -173,25 +173,35 @@ public class AuthorizeResource {
         }
 
         if (isBlank(subjectId)) {
-            return signIn.begin(request).map(result -> switch (result) {
-                case BeginResult.Started started -> Response.seeOther(uriInfo.getBaseUriBuilder()
-                                .path("signin")
-                                .queryParam("txn", started.transactionId())
-                                .build())
-                        .cookie(SignInCookies.issue(
-                                uriInfo, started.binding(), started.lifetime().toSeconds()))
-                        .header("Cache-Control", "no-store")
-                        .build();
-                case BeginResult.Refused refused -> errorBody(refused.error(), refused.description());
-            });
+            return signIn.begin(request).map(result -> toSignIn(uriInfo, result));
         }
 
+        // Signed in already: a code only if the user consented to this client for every
+        // requested scope; otherwise the request waits at the hosted page's consent step.
         return authorize.authorize(request, subjectId)
-                .map(result -> render(result, redirectUri, state));
+                .flatMap(result -> result instanceof AuthorizeResult.ConsentRequired
+                        ? signIn.beginConsent(request, subjectId).map(begun -> toSignIn(uriInfo, begun))
+                        : Uni.createFrom().item(render(result, redirectUri, state)));
+    }
+
+    /** {@code 303} to the hosted page for a parked request, with its browser-binding cookie. */
+    private static Response toSignIn(UriInfo uriInfo, BeginResult result) {
+        return switch (result) {
+            case BeginResult.Started started -> Response.seeOther(uriInfo.getBaseUriBuilder()
+                            .path("signin")
+                            .queryParam("txn", started.transactionId())
+                            .build())
+                    .cookie(SignInCookies.issue(uriInfo, started.binding(), started.lifetime().toSeconds()))
+                    .header("Cache-Control", "no-store")
+                    .build();
+            case BeginResult.Refused refused -> errorBody(refused.error(), refused.description());
+        };
     }
 
     private Response render(AuthorizeResult result, String redirectUri, String state) {
         return switch (result) {
+            case AuthorizeResult.ConsentRequired required ->
+                    throw new IllegalStateException("consent is answered by the sign-in page, not rendered here");
             case AuthorizeResult.Issued issued -> redirect(AuthorizationResponses.success(
                     redirectUri, issued.code(), issued.state(), config.issuer()));
             case AuthorizeResult.Failed failed -> failed.redirectable()

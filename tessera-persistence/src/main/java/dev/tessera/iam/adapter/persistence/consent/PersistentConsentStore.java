@@ -72,8 +72,9 @@ public class PersistentConsentStore implements ConsentStorePort {
                         // no-op, not the expected path.
                         return Uni.createFrom().voidItem();
                     }
-                    return consents.persist(tenantId, newConsent(realm, user, clientId, scopes))
-                            .replaceWithVoid();
+                    // An upsert, never a plain insert: a second consent for the same user and
+                    // client replaces the first (more scopes asked later), as the port promises.
+                    return consents.upsert(tenantId, newConsent(realm, user, clientId, scopes));
                 });
     }
 
@@ -92,7 +93,9 @@ public class PersistentConsentStore implements ConsentStorePort {
 
     private static boolean covers(ConsentEntity found, Set<String> requiredScopes) {
         if (found == null) {
-            return requiredScopes.isEmpty();
+            // Fail closed: a request that names no scope still releases a code to the client,
+            // so it needs the user's consent to that client like any other.
+            return false;
         }
         Set<String> granted = parseScopes(found.grantedScopes);
         return granted.containsAll(requiredScopes);

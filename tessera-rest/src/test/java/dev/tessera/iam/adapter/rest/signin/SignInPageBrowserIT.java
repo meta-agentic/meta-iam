@@ -15,11 +15,13 @@ import com.microsoft.playwright.options.Cookie;
 import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.SameSiteAttribute;
 import dev.tessera.iam.adapter.rest.support.FakeClientRepository;
+import dev.tessera.iam.adapter.rest.support.FakeConsentStore;
 import dev.tessera.iam.adapter.rest.support.FakePasswordCredentialVerifier;
 import dev.tessera.iam.adapter.rest.support.HostileThemeResource;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import java.net.HttpCookie;
 import java.net.URI;
 import java.net.URL;
@@ -66,6 +68,9 @@ class SignInPageBrowserIT {
 
     @TestHTTPResource("/")
     URL base;
+
+    @Inject
+    FakeConsentStore consents;
 
     @BeforeAll
     static void start() {
@@ -148,7 +153,11 @@ class SignInPageBrowserIT {
         }
 
         void typePassword() {
-            page.fill("#username", FakePasswordCredentialVerifier.USERNAME);
+            typePassword(FakePasswordCredentialVerifier.USERNAME);
+        }
+
+        void typePassword(String username) {
+            page.fill("#username", username);
             page.fill("#password", FakePasswordCredentialVerifier.CORRECT_PASSWORD);
             settle();
         }
@@ -235,6 +244,29 @@ class SignInPageBrowserIT {
             Response response = page.navigate(base + "signin?txn=" + URLEncoder.encode(hostile, StandardCharsets.UTF_8));
             assertThat(response.status()).isEqualTo(400);
             assertThat(page.content()).doesNotContain("window.escaped");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"chromium", "firefox", "webkit"})
+    @DisplayName("with the policy, a user without consent is asked on the themed page, and Allow ends at the client with a code")
+    void consentStepCompletes(String browserName) throws Exception {
+        consents.requireConsent(FakePasswordCredentialVerifier.CONSENT_SUBJECT);
+        consents.forget(FakePasswordCredentialVerifier.CONSENT_SUBJECT);
+        try (Session session = new Session(browserName, true)) {
+            session.typePassword(FakePasswordCredentialVerifier.CONSENT_USERNAME);
+            session.page.click("button[type=submit]");
+            session.page.waitForSelector("button[value=allow]");
+            assertThat(session.page.textContent("h1")).isEqualTo("Allow access");
+
+            // The form posts to tessera, then the browser follows the redirect to the client:
+            // the consent page's policy allowed both hops.
+            Request callback = session.page.waitForRequest(
+                    request -> request.url().startsWith(REDIRECT_URI + "?"),
+                    () -> session.page.click("button[value=allow]"));
+
+            assertThat(callback.url()).contains("code=", "state=browser");
+            assertThat(HostileThemeResource.requests()).isEmpty();
         }
     }
 }
