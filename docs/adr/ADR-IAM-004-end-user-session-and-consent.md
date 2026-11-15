@@ -7,15 +7,30 @@
 | Ratified | 2026-10-19 |
 | Relates to | [ADR-IAM-002](ADR-IAM-002-standalone-public-origin.md) (standalone public origin), [ADR-IAM-005](ADR-IAM-005-oidf-basic-op-conformance-in-ci.md) (conformance) |
 
+
+## Status log
+
+The decisions are unchanged. The status notes in the body record where the code caught up with them.
+
+| Date | Change |
+|---|---|
+| 2026-10-03 | Proposed. |
+| 2026-10-19 | Accepted. |
+| 2026-11-15 | Status notes added to Background, D1, D5 and Known defects: D1's enforcement, D5's hosted page and the replace-on-second-consent fix are now built. No decision changes. |
+
 ---
 
 ## Background
 
 `/authorize` takes the logged-in user from an `X-Subject-Id` header, but nothing set it. Login, a session cookie and consent were added to fill that gap ([#76](https://github.com/isohub-space/tessera/pull/76)). This record states those choices. D1's enforcement rule and D5's login page are decided but not yet built.
 
+> **Status note, 2026-11-15:** both are now built. The hosted sign-in page arrived on 2026-10-26 (`150b8ba`, under ADR-IAM-006 D2), and D1's enforcement with its consent step on 2026-11-15 (#193).
+
 ## D1 — Consent per user and client, enforced for every client
 
 **Decision.** Consent is stored per `(user, client)` as a set of scopes. `/authorize` requires consent covering the requested scopes for every client, with no first-party exemption. Enforcement is not yet built.
+
+> **Status note, 2026-11-15:** enforcement is built (#193). `/authorize` issues no code without consent covering the requested scopes, on both ways in: a session at `/authorize`, and the hosted sign-in. The hosted page asks under the same transaction; allow records the consent, and deny returns `access_denied` (RFC 6749 §4.1.2.1). No client is exempt or pre-consented. A request that names no scope still needs a consent row.
 
 **What it means.** Recording consent again replaces the set. The `consent` table is unique on `(tenant_id, baseline_id, user_id, client_id)` and stores the scopes as `granted_scopes`.
 
@@ -65,6 +80,8 @@
 **Consequences.**
 1. Until the page exists, `/authorize` without a session refuses with `400` and does not redirect. Conformance testing waits for it (ADR-IAM-005).
 
+> **Status note, 2026-11-15:** the page exists. ADR-IAM-006 D2 brought it forward, and it shipped on 2026-10-26 (`150b8ba`): `/authorize` without a session answers `303` to `/signin`, and the consent step joined it on 2026-11-15 (#193). Themes are ADR-IAM-008. MFA stays out of scope, and `POST /login` remains (ADR-IAM-010 open item 2).
+
 ## Rejected alternatives
 
 - **Per-scope consent now.** Needs a new schema grain, and no current flow lets a user split a request.
@@ -76,7 +93,7 @@
 
 ## Known defects
 
-- A second consent for the same user and client fails instead of replacing.
+- A second consent for the same user and client fails instead of replacing. *Fixed 2026-11-15 (#193): one upsert on `uq_consent_pair` replaces the scopes and time.*
 - Login is not scoped to the baseline: a user can sign in to another baseline of the same tenant, and the consent path's user lookup has the same gap.
 - Expired sessions are never purged.
 - A new login or a password change does not end earlier sessions.
