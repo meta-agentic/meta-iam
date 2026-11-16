@@ -173,19 +173,23 @@ public class AuthorizeResource {
         }
 
         if (isBlank(subjectId)) {
-            return signIn.begin(request).map(result -> toSignIn(uriInfo, result));
+            return signIn.begin(request).map(result -> toSignIn(uriInfo, result, redirectUri, state));
         }
 
         // Signed in already: a code only if the user consented to this client for every
         // requested scope; otherwise the request waits at the hosted page's consent step.
         return authorize.authorize(request, subjectId)
                 .flatMap(result -> result instanceof AuthorizeResult.ConsentRequired
-                        ? signIn.beginConsent(request, subjectId).map(begun -> toSignIn(uriInfo, begun))
+                        ? signIn.beginConsent(request, subjectId)
+                                .map(begun -> toSignIn(uriInfo, begun, redirectUri, state))
                         : Uni.createFrom().item(render(result, redirectUri, state)));
     }
 
-    /** {@code 303} to the hosted page for a parked request, with its browser-binding cookie. */
-    private static Response toSignIn(UriInfo uriInfo, BeginResult result) {
+    /**
+     * {@code 303} to the hosted page for a parked request, with its browser-binding cookie; or the
+     * refusal, redirected to the client only when the refusal says the redirect URI is validated.
+     */
+    private Response toSignIn(UriInfo uriInfo, BeginResult result, String redirectUri, String state) {
         return switch (result) {
             case BeginResult.Started started -> Response.seeOther(uriInfo.getBaseUriBuilder()
                             .path("signin")
@@ -194,7 +198,10 @@ public class AuthorizeResource {
                     .cookie(SignInCookies.issue(uriInfo, started.binding(), started.lifetime().toSeconds()))
                     .header("Cache-Control", "no-store")
                     .build();
-            case BeginResult.Refused refused -> errorBody(refused.error(), refused.description());
+            case BeginResult.Refused refused -> refused.redirectable()
+                    ? redirect(AuthorizationResponses.error(
+                            redirectUri, refused.error(), refused.description(), state, config.issuer()))
+                    : errorBody(refused.error(), refused.description());
         };
     }
 

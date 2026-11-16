@@ -90,7 +90,7 @@ public final class SignInService implements SignInUseCase {
                     AuthorizeResult.Failed refusal = ClientRequestCheck.refusal(client, request);
                     if (refusal != null) {
                         return Uni.createFrom().item(
-                                (BeginResult) new BeginResult.Refused(refusal.error(), refusal.description()));
+                                (BeginResult) new BeginResult.Refused(refusal.error(), refusal.description(), refusal.redirectable()));
                     }
                     return park(request, null);
                 });
@@ -109,7 +109,7 @@ public final class SignInService implements SignInUseCase {
                     AuthorizeResult.Failed refusal = ClientRequestCheck.refusal(client, request);
                     if (refusal != null) {
                         return Uni.createFrom().item(
-                                (BeginResult) new BeginResult.Refused(refusal.error(), refusal.description()));
+                                (BeginResult) new BeginResult.Refused(refusal.error(), refusal.description(), refusal.redirectable()));
                     }
                     return park(request, subjectId);
                 });

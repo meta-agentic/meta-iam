@@ -32,7 +32,19 @@ public record PublicClient(
         Set<GrantType> allowedGrants,
         Set<String> redirectUris,
         Set<String> postLogoutRedirectUris,
-        SignInTheme signInTheme) implements Client {
+        SignInTheme signInTheme,
+        Set<String> userScopes) implements Client {
+
+    /** A client with no scopes registered for tokens issued for a person: it may ask only for {@code openid}. */
+    public PublicClient(
+            ClientId id,
+            RealmKey realm,
+            Set<GrantType> allowedGrants,
+            Set<String> redirectUris,
+            Set<String> postLogoutRedirectUris,
+            SignInTheme signInTheme) {
+        this(id, realm, allowedGrants, redirectUris, postLogoutRedirectUris, signInTheme, Set.of());
+    }
 
     /** A client whose registration names no sign-in theme. */
     public PublicClient(
@@ -65,10 +77,19 @@ public record PublicClient(
         if (postLogoutRedirectUris == null) {
             throw new IllegalArgumentException("PublicClient postLogoutRedirectUris must not be null");
         }
+        if (userScopes == null) {
+            throw new IllegalArgumentException("PublicClient userScopes must not be null");
+        }
+        for (String scope : userScopes) {
+            if (scope == null || scope.isBlank() || scope.chars().anyMatch(Character::isWhitespace)) {
+                throw new IllegalArgumentException("PublicClient userScopes holds an invalid scope: " + scope);
+            }
+        }
         // Defensive copy + unmodifiable view: the record stays immutable even if the
         // caller mutates the set it passed in.
         allowedGrants = Collections.unmodifiableSet(new HashSet<>(allowedGrants));
         redirectUris = Collections.unmodifiableSet(new LinkedHashSet<>(redirectUris));
         postLogoutRedirectUris = Collections.unmodifiableSet(new LinkedHashSet<>(postLogoutRedirectUris));
+        userScopes = Collections.unmodifiableSet(new LinkedHashSet<>(userScopes));
     }
 }

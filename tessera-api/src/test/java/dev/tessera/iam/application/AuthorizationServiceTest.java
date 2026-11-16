@@ -108,7 +108,8 @@ class AuthorizationServiceTest {
 
     private static Client publicClient(Set<String> redirectUris) {
         return new PublicClient(
-                ClientId.generate(), REALM, Set.<GrantType>of(new AuthorizationCode()), redirectUris);
+                ClientId.generate(), REALM, Set.<GrantType>of(new AuthorizationCode()), redirectUris, Set.of(), null,
+                Set.of("profile"));
     }
 
     private static AuthorizationRequest request(String redirectUri) {
@@ -184,5 +185,31 @@ class AuthorizationServiceTest {
         consented = null;
         AuthorizeResult result = authorize(publicClient(Set.of(REGISTERED)), "https://c.example/evil");
         assertThat(result).isInstanceOf(AuthorizeResult.Failed.class);
+    }
+
+    private AuthorizeResult authorizeScopes(Set<String> scopes) {
+        consented = Set.of("openid", "profile", "admin.all");
+        AuthorizationRequest request = new AuthorizationRequest(REALM, CLIENT_ID, REGISTERED, scopes, "state-1",
+                "nonce-1", CodeChallenge.s256(CHALLENGE));
+        return service(publicClient(Set.of(REGISTERED))).authorize(request, "sub-1").await().indefinitely();
+    }
+
+    @Test
+    @DisplayName("a scope the client did not register is a redirectable invalid_scope, refused before consent, with NO code")
+    void unregisteredScopeIsRefused() {
+        assertThat(authorizeScopes(Set.of("openid", "admin.all"))).isInstanceOfSatisfying(
+                AuthorizeResult.Failed.class, failed -> {
+                    assertThat(failed.error()).isEqualTo(AuthorizationError.INVALID_SCOPE);
+                    assertThat(failed.redirectable()).isTrue();
+                });
+        assertThat(storeCount).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("openid alone, and a registered subset, are allowed")
+    void openidAndRegisteredScopesAreAllowed() {
+        assertThat(authorizeScopes(Set.of("openid"))).isInstanceOf(AuthorizeResult.Issued.class);
+        assertThat(authorizeScopes(Set.of("openid", "profile"))).isInstanceOf(AuthorizeResult.Issued.class);
+        assertThat(authorizeScopes(Set.of())).isInstanceOf(AuthorizeResult.Issued.class);
     }
 }

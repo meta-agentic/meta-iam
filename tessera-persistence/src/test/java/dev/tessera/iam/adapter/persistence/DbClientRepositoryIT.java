@@ -118,14 +118,20 @@ class DbClientRepositoryIT {
         UUID clientId = UUID.randomUUID();
         String hash = Password.hash("correct-secret").with(FAST).getResult();
 
-        asserter.execute(() -> scoped(tenant, s ->
-                s.persist(confidential(tenant, clientId, "web-app", hash)).call(s::flush)));
+        asserter.execute(() -> scoped(tenant, s -> {
+            OAuthClientEntity entity = confidential(tenant, clientId, "web-app", hash);
+            entity.userScopes = "profile offline_access";
+            return s.persist(entity).call(s::flush);
+        }));
 
         asserter.assertThat(
                 () -> clientRepository.findByClientId(realm(tenant), "web-app"),
                 client -> {
                     org.assertj.core.api.Assertions.assertThat(client)
                             .isInstanceOf(ConfidentialClient.class);
+                    // V15's column round-trips through Postgres.
+                    org.assertj.core.api.Assertions.assertThat(client.userScopes())
+                            .containsExactly("profile", "offline_access");
                     org.assertj.core.api.Assertions.assertThat(client.id().value()).isEqualTo(clientId);
                     org.assertj.core.api.Assertions.assertThat(client.redirectUris())
                             .containsExactly("https://client.example/callback");

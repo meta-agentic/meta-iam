@@ -47,7 +47,24 @@ public record ConfidentialClient(
         Set<String> audiences,
         List<String> roles,
         Set<String> postLogoutRedirectUris,
-        SignInTheme signInTheme) implements Client {
+        SignInTheme signInTheme,
+        Set<String> userScopes) implements Client {
+
+    /** A client with no scopes registered for tokens issued for a person: it may ask only for {@code openid}. */
+    public ConfidentialClient(
+            ClientId id,
+            RealmKey realm,
+            Set<GrantType> allowedGrants,
+            ClientAuthMethod authMethod,
+            Set<String> redirectUris,
+            Set<String> allowedScopes,
+            Set<String> audiences,
+            List<String> roles,
+            Set<String> postLogoutRedirectUris,
+            SignInTheme signInTheme) {
+        this(id, realm, allowedGrants, authMethod, redirectUris, allowedScopes, audiences, roles,
+                postLogoutRedirectUris, signInTheme, Set.of());
+    }
 
     /** A client whose registration names no sign-in theme. */
     public ConfidentialClient(
@@ -111,6 +128,10 @@ public record ConfidentialClient(
             throw new IllegalArgumentException("ConfidentialClient postLogoutRedirectUris must not be null");
         }
         allowedScopes.forEach(scope -> require(isScopeToken(scope), "allowedScopes", scope));
+        if (userScopes == null) {
+            throw new IllegalArgumentException("ConfidentialClient userScopes must not be null");
+        }
+        userScopes.forEach(scope -> require(isScopeToken(scope), "userScopes", scope));
         audiences.forEach(audience -> require(isToken(audience), "audiences", audience));
         roles.forEach(role -> require(isToken(role), "roles", role));
         // Defensive copy + unmodifiable view: the record stays immutable even if the
@@ -118,6 +139,7 @@ public record ConfidentialClient(
         allowedGrants = Collections.unmodifiableSet(new HashSet<>(allowedGrants));
         redirectUris = Collections.unmodifiableSet(new LinkedHashSet<>(redirectUris));
         allowedScopes = Collections.unmodifiableSet(new LinkedHashSet<>(allowedScopes));
+        userScopes = Collections.unmodifiableSet(new LinkedHashSet<>(userScopes));
         audiences = Collections.unmodifiableSet(new LinkedHashSet<>(audiences));
         roles = List.copyOf(roles);
         postLogoutRedirectUris = Collections.unmodifiableSet(new LinkedHashSet<>(postLogoutRedirectUris));
