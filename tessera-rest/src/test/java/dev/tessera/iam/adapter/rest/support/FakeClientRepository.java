@@ -39,6 +39,13 @@ import java.util.UUID;
 @ApplicationScoped
 public class FakeClientRepository implements ClientRepositoryPort {
 
+    /**
+     * The scopes the code-grant test clients register for tokens issued for a person, besides
+     * {@code openid}. {@code admin.all} is deliberately absent: the scope tests ask for it.
+     */
+    public static final Set<String> USER_SCOPES =
+            Set.of("profile", "email", "address", "phone", "offline_access", "custom.scope");
+
     public static final String PUBLIC_CLIENT_ID = "public-spa";
     public static final String CONFIDENTIAL_CLIENT_ID = "confidential-web";
     public static final String NO_CODE_CLIENT_ID = "no-code-client";
@@ -107,13 +114,14 @@ public class FakeClientRepository implements ClientRepositoryPort {
         }
         Client client = switch (clientId == null ? "" : clientId) {
             case PUBLIC_CLIENT_ID -> new PublicClient(
-                    PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, POST_LOGOUT_REDIRECTS);
+                    PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, POST_LOGOUT_REDIRECTS, null, USER_SCOPES);
             case CONFIDENTIAL_CLIENT_ID -> new ConfidentialClient(
-                    CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
+                    CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS,
+                    Set.of(), Set.of(), List.of(), Set.of(), null, USER_SCOPES);
             case NO_CODE_CLIENT_ID -> new ConfidentialClient(
                     NO_CODE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
             case REFRESH_CLIENT_ID -> new PublicClient(
-                    REFRESH_IDENTITY, realm, CODE_AND_REFRESH, REDIRECTS, POST_LOGOUT_REDIRECTS);
+                    REFRESH_IDENTITY, realm, CODE_AND_REFRESH, REDIRECTS, POST_LOGOUT_REDIRECTS, null, USER_SCOPES);
             case MACHINE_CLIENT_ID -> MACHINE_TENANT.equals(realm.tenant().value().toString())
                     ? new ConfidentialClient(MACHINE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
                             ClientAuthMethod.CLIENT_SECRET_BASIC, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
@@ -137,11 +145,11 @@ public class FakeClientRepository implements ClientRepositoryPort {
     private static Client byMethod(RealmKey realm, ClientAuthMethod method) {
         return new ConfidentialClient(CONFIDENTIAL_IDENTITY, realm,
                 Set.of(new AuthorizationCode(), new ClientCredentials(), new RefreshToken()), method, REDIRECTS,
-                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES);
+                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES, Set.of(), null, USER_SCOPES);
     }
 
     private static Client themed(RealmKey realm, String theme) {
-        return new PublicClient(PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, Set.of(), new SignInTheme(theme));
+        return new PublicClient(PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, Set.of(), new SignInTheme(theme), USER_SCOPES);
     }
 
     /** A {@link FakeWorkloads} client, registered only in {@link #MACHINE_TENANT}. */

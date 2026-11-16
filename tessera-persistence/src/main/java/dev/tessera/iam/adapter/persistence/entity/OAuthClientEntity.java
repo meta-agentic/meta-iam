@@ -132,6 +132,13 @@ public class OAuthClientEntity extends PanacheEntityBase {
     @Column(name = "sign_in_theme")
     public String signInTheme;
 
+    /**
+     * Whitespace-separated scopes it may request on the authorization-code grant, besides
+     * {@code openid}; {@code null} for none.
+     */
+    @Column(name = "user_scopes")
+    public String userScopes;
+
     /** Creation instant (UTC). */
     @Column(name = "created_at", nullable = false, updatable = false)
     public Instant createdAt;

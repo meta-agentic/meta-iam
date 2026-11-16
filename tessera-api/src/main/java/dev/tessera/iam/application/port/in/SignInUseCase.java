@@ -170,12 +170,14 @@ public interface SignInUseCase {
 
         /**
          * The request cannot be answered: an unknown client, a client not allowed the code
-         * grant, or an unregistered redirect URI. Never redirected.
+         * grant, an unregistered redirect URI, or a scope the client is not registered for.
          *
-         * @param error       the OAuth error
-         * @param description a non-sensitive description
+         * @param error        the OAuth error
+         * @param description  a non-sensitive description
+         * @param redirectable whether the error may go back to the request's redirect URI: only
+         *                     once that URI is validated as the client's (RFC 6749 §4.1.2.1)
          */
-        record Refused(AuthorizationError error, String description) implements BeginResult {
+        record Refused(AuthorizationError error, String description, boolean redirectable) implements BeginResult {
         }
     }
 

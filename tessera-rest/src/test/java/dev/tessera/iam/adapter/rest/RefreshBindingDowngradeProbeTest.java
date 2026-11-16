@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,7 +66,8 @@ class RefreshBindingDowngradeProbeTest {
                 return Uni.createFrom().item(new ConfidentialClient(
                         FakeClientRepository.CONFIDENTIAL_IDENTITY, realm,
                         Set.of(new AuthorizationCode(), new RefreshToken()),
-                        ClientAuthMethod.CLIENT_SECRET_POST, Set.of(REDIRECT_URI)));
+                        ClientAuthMethod.CLIENT_SECRET_POST, Set.of(REDIRECT_URI), Set.of(), Set.of(), List.of(),
+                        Set.of(), null, FakeClientRepository.USER_SCOPES));
             }
             return super.findByClientId(realm, clientId);
         }

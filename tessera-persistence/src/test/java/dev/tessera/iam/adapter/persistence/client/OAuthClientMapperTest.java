@@ -68,6 +68,19 @@ class OAuthClientMapperTest {
     }
 
     @Test
+    @DisplayName("user scopes map for both kinds from the whitespace list, and are empty when the row names none")
+    void userScopesMap() {
+        OAuthClientEntity confidential = entity(ClientType.CONFIDENTIAL, "CLIENT_SECRET_BASIC", "authorization_code");
+        confidential.userScopes = "profile  offline_access";
+        OAuthClientEntity pub = entity(ClientType.PUBLIC, null, "authorization_code");
+        pub.userScopes = "email";
+        assertThat(OAuthClientMapper.toDomain(confidential).userScopes()).containsExactly("profile", "offline_access");
+        assertThat(OAuthClientMapper.toDomain(pub).userScopes()).containsExactly("email");
+        assertThat(OAuthClientMapper.toDomain(entity(ClientType.PUBLIC, null, "authorization_code")).userScopes())
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("a corrupt theme name fails loudly (bad registry data)")
     void corruptSignInThemeRejected() {
         OAuthClientEntity e = entity(ClientType.PUBLIC, null, "authorization_code");

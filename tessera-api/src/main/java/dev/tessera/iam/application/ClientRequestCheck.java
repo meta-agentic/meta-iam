@@ -13,12 +13,17 @@ import dev.tessera.iam.domain.client.grant.GrantType;
  * happens on its behalf: a code is minted, or the browser is sent to the sign-in page.
  *
  * <p>Shared by {@link AuthorizationService} and {@link SignInService} so the two paths cannot
- * drift apart. Every refusal is non-redirectable: until the client and its redirect URI are
- * validated, the redirect target is itself untrusted.
+ * drift apart. A refusal before the client and its redirect URI are validated is
+ * non-redirectable, because the redirect target is itself untrusted. A scope the client is not
+ * registered for is checked last, once the redirect URI is known to be the client's, so it is
+ * redirected as {@code invalid_scope} (RFC 6749 §4.1.2.1), and refused before any consent is
+ * asked: a person is never asked for a scope the client may not have.
  */
 final class ClientRequestCheck {
 
     private static final GrantType AUTHORIZATION_CODE = new AuthorizationCode();
+    /** Always allowed: it asks for sign-in itself, not for access to anything. */
+    private static final String OPENID = "openid";
 
     private ClientRequestCheck() {
     }
@@ -40,6 +45,12 @@ final class ClientRequestCheck {
             // Exact match. Delivering anything to an unregistered URI would be an open redirect.
             return new AuthorizeResult.Failed(AuthorizationError.INVALID_REQUEST,
                     "redirect_uri is not registered for this client", false);
+        }
+        for (String scope : request.scopes()) {
+            if (!OPENID.equals(scope) && !client.userScopes().contains(scope)) {
+                return new AuthorizeResult.Failed(AuthorizationError.INVALID_SCOPE,
+                        "a requested scope is not registered for this client", true);
+            }
         }
         return null;
     }

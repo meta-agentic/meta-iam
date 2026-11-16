@@ -47,6 +47,12 @@ public interface BootstrapConfig {
         /** The theme its sign-in page shows; blank names none. */
         Optional<String> signInTheme();
 
+        /**
+         * Scopes it may request on the authorization-code grant besides {@code openid}
+         * (comma-separated in configuration); empty allows {@code openid} only.
+         */
+        Optional<List<String>> userScopes();
+
         /** Allowed grants, as wire values. */
         @WithDefault("authorization_code,refresh_token")
         List<String> grants();

@@ -66,4 +66,14 @@ public sealed interface Client permits ConfidentialClient, PublicClient {
      * @return the theme, or {@code null} when the registration names none
      */
     SignInTheme signInTheme();
+
+    /**
+     * The scopes this client may request on the authorization-code grant, for tokens issued for
+     * a person. {@code openid} is always allowed and need not be listed; any other scope must be.
+     * Separate from a confidential client's {@code client_credentials} scopes, which it receives
+     * for itself. Returned as an unmodifiable set; may be empty.
+     *
+     * @return an immutable view of the registered user scopes
+     */
+    Set<String> userScopes();
 }
