@@ -59,6 +59,24 @@ public record ProblemResponse(String type, String title, int status, String deta
     }
 
     /**
+     * Builds a 503 problem response for a request refused because the tenant registry could not be
+     * read (ADR-IAM-003 D1 consequence 2: never a default). Carries {@code Cache-Control: no-store}.
+     */
+    public static Response registryUnavailable() {
+        ProblemResponse body =
+                new ProblemResponse(
+                        "about:blank",
+                        "Service Unavailable",
+                        Response.Status.SERVICE_UNAVAILABLE.getStatusCode(),
+                        "The request cannot be served right now; retry later.");
+        return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                .type(MEDIA_TYPE)
+                .header("Cache-Control", "no-store")
+                .entity(body)
+                .build();
+    }
+
+    /**
      * Builds a 429 problem response for a throttled request. Carries {@code Retry-After} (whole
      * seconds, per RFC 7231) so the caller can back off, and {@code Cache-Control: no-store} so the
      * throttling verdict is never cached.

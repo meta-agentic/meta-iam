@@ -2,6 +2,9 @@ package dev.tessera.iam.adapter.rest.config;
 
 import dev.tessera.iam.adapter.rest.login.LoginConfig;
 import dev.tessera.iam.application.AuthorizationService;
+import dev.tessera.iam.application.AdmittedClientCredentialsUseCase;
+import dev.tessera.iam.application.AdmittedRefreshUseCase;
+import dev.tessera.iam.application.AdmittedTokenUseCase;
 import dev.tessera.iam.application.ClientCredentialsService;
 import dev.tessera.iam.application.ConsentService;
 import dev.tessera.iam.application.EndSessionService;
@@ -12,6 +15,7 @@ import dev.tessera.iam.application.RegisteredClientClaimSource;
 import dev.tessera.iam.application.RevokeService;
 import dev.tessera.iam.application.SessionService;
 import dev.tessera.iam.application.SignInService;
+import dev.tessera.iam.application.TenantAdmission;
 import dev.tessera.iam.application.TokenService;
 import dev.tessera.iam.application.port.in.AuthorizeUseCase;
 import dev.tessera.iam.application.port.in.ClientCredentialsUseCase;
@@ -39,6 +43,7 @@ import dev.tessera.iam.application.port.out.PendingAuthorizationStorePort;
 import dev.tessera.iam.application.port.out.RefreshTokenStorePort;
 import dev.tessera.iam.application.port.out.RefreshTokenTenantResolverPort;
 import dev.tessera.iam.application.port.out.SessionStorePort;
+import dev.tessera.iam.application.port.out.TenantRegistryPort;
 import dev.tessera.iam.application.port.out.TokenSignerPort;
 import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -90,9 +95,20 @@ public class UseCaseProducer {
                 clients, consents, authorize, login, pending, identifiers, clock, authFlow.signInTtl());
     }
 
+    /**
+     * The one tenant admission every token-minting grant goes through (ADR-IAM-003 D1): the three
+     * grant producers below wrap their service in it, and {@code TenantAdmissionFlowTest} pins that.
+     */
+    @Produces
+    @ApplicationScoped
+    TenantAdmission tenantAdmission(TenantRegistryPort registry) {
+        return new TenantAdmission(registry);
+    }
+
     @Produces
     @ApplicationScoped
     TokenUseCase tokenUseCase(
+            TenantAdmission admission,
             ClientRepositoryPort clients,
             AuthorizationCodeStorePort codeStore,
             ClientSecretVerifierPort secretVerifier,
@@ -104,7 +120,7 @@ public class UseCaseProducer {
             OidcDiscoveryConfig oidc,
             AuthFlowConfig authFlow,
             RefreshConfig refresh) {
-        return new TokenService(
+        return new AdmittedTokenUseCase(admission, new TokenService(
                 clients,
                 codeStore,
                 secretVerifier,
@@ -119,7 +135,7 @@ public class UseCaseProducer {
                 authFlow.idTokenTtl(),
                 refresh.refreshTokenTtl(),
                 refresh.enabled(),
-                authFlow.requireSenderConstraint());
+                authFlow.requireSenderConstraint()));
     }
 
     /**
@@ -135,6 +151,7 @@ public class UseCaseProducer {
     @ApplicationScoped
     @Startup
     RefreshUseCase refreshUseCase(
+            TenantAdmission admission,
             ClientRepositoryPort clients,
             ClientSecretVerifierPort secretVerifier,
             TokenSignerPort signer,
@@ -145,7 +162,7 @@ public class UseCaseProducer {
             OidcDiscoveryConfig oidc,
             AuthFlowConfig authFlow,
             RefreshConfig refresh) {
-        return new RefreshService(
+        return new AdmittedRefreshUseCase(admission, new RefreshService(
                 clients,
                 secretVerifier,
                 signer,
@@ -158,7 +175,7 @@ public class UseCaseProducer {
                 authFlow.idTokenTtl(),
                 refresh.enabled(),
                 refresh.reuseGrace(),
-                successorKey(refresh));
+                successorKey(refresh)));
     }
 
     /**
@@ -188,6 +205,7 @@ public class UseCaseProducer {
     @Produces
     @ApplicationScoped
     ClientCredentialsUseCase clientCredentialsUseCase(
+            TenantAdmission admission,
             ClientRepositoryPort clients,
             ClientSecretVerifierPort secretVerifier,
             ClientKeySourcePort keySource,
@@ -198,7 +216,7 @@ public class UseCaseProducer {
             OidcDiscoveryConfig oidc,
             AuthFlowConfig authFlow,
             ClientCredentialsConfig clientCredentials) {
-        return new ClientCredentialsService(
+        return new AdmittedClientCredentialsUseCase(admission, new ClientCredentialsService(
                 clients,
                 secretVerifier,
                 keySource,
@@ -209,7 +227,7 @@ public class UseCaseProducer {
                 clock,
                 oidc.issuer(),
                 clientCredentials.accessTokenTtl(),
-                authFlow.requireSenderConstraint());
+                authFlow.requireSenderConstraint()));
     }
 
     @Produces
