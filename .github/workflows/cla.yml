@@ -34,7 +34,9 @@ jobs:
   cla-check:
     name: cla-signed
     runs-on: ubuntu-latest
-    # Only run on PRs to this repository; skip Dependabot (automated).
+    # Skip runs that Dependabot itself triggers. A run that a person triggers on a Dependabot PR
+    # (a comment such as "@dependabot recreate", a rebase, a re-run) still checks its commits,
+    # whose author is the bot: that is what the allowlist below covers.
     if: >
       github.actor != 'dependabot[bot]' &&
       github.actor != 'dependabot-preview[bot]'
@@ -58,4 +60,6 @@ jobs:
             Click the button below — it takes about 30 seconds. The CLA text
             is in [CLA.md](../blob/main/CLA.md).
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
-          allowlist: 'mova77'
+          # Commit authors who need no signature: the maintainer, and Dependabot, an automated
+          # dependency-update bot that cannot sign and contributes no authored work.
+          allowlist: 'mova77,dependabot[bot]'
