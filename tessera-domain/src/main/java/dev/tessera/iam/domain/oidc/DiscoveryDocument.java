@@ -27,6 +27,7 @@ import java.util.List;
  * @param tokenEndpointAuthSigningAlgValuesSupported algorithms accepted for a client assertion
  * @param scopesSupported                offered OAuth2 scopes
  * @param dpopSigningAlgValuesSupported   algorithms accepted for DPoP proofs
+ * @param claimsSupported                 claims the ID token can carry (OIDC Discovery §3)
  * @param tlsClientCertificateBoundAccessTokens whether access tokens are certificate-bound
  */
 public record DiscoveryDocument(
@@ -44,6 +45,7 @@ public record DiscoveryDocument(
         List<String> tokenEndpointAuthSigningAlgValuesSupported,
         List<String> scopesSupported,
         List<String> dpopSigningAlgValuesSupported,
+        List<String> claimsSupported,
         boolean tlsClientCertificateBoundAccessTokens) {
 
     public DiscoveryDocument {
@@ -59,6 +61,7 @@ public record DiscoveryDocument(
         tokenEndpointAuthSigningAlgValuesSupported = List.copyOf(tokenEndpointAuthSigningAlgValuesSupported);
         scopesSupported = List.copyOf(scopesSupported);
         dpopSigningAlgValuesSupported = List.copyOf(dpopSigningAlgValuesSupported);
+        claimsSupported = List.copyOf(claimsSupported);
     }
 
     /**
@@ -100,6 +103,7 @@ public record DiscoveryDocument(
                 caps.tokenEndpointAuthSigningAlgValuesSupported(),
                 caps.scopesSupported(),
                 caps.dpopSigningAlgValuesSupported(),
+                caps.claimsSupported(),
                 caps.tlsClientCertificateBoundAccessTokens());
     }
 

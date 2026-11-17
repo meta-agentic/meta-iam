@@ -31,6 +31,7 @@ import org.eclipse.microprofile.openapi.annotations.media.Schema;
  *                                          omitted when no assertion method is offered
  * @param scopesSupported                   offered OAuth2 scopes
  * @param dpopSigningAlgValuesSupported     algorithms accepted for DPoP proofs
+ * @param claimsSupported                   claims the ID token can carry
  * @param tlsClientCertificateBoundAccessTokens whether access tokens are certificate-bound
  */
 @Schema(name = "DiscoveryDocument", description = "OpenID Provider metadata (OIDC Discovery 1.0).")
@@ -53,6 +54,7 @@ public record DiscoveryDto(
                 List<String> tokenEndpointAuthSigningAlgValuesSupported,
         @JsonProperty("scopes_supported") List<String> scopesSupported,
         @JsonProperty("dpop_signing_alg_values_supported") List<String> dpopSigningAlgValuesSupported,
+        @JsonProperty("claims_supported") List<String> claimsSupported,
         @JsonProperty("tls_client_certificate_bound_access_tokens")
                 boolean tlsClientCertificateBoundAccessTokens) {
 
@@ -73,6 +75,7 @@ public record DiscoveryDto(
                 doc.tokenEndpointAuthSigningAlgValuesSupported(),
                 doc.scopesSupported(),
                 doc.dpopSigningAlgValuesSupported(),
+                doc.claimsSupported(),
                 doc.tlsClientCertificateBoundAccessTokens());
     }
 }

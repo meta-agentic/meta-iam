@@ -97,7 +97,7 @@ class RefreshReuseGraceTest {
 
     private RefreshService service(Duration grace, byte[] key) {
         return new RefreshService(clients, verifier, signer, ids, store, store, clock,
-                "https://issuer.test", Duration.ofMinutes(5), Duration.ofMinutes(5), true, grace, key, StandardProfiles.CHECK);
+                "https://issuer.test", Duration.ofMinutes(5), Duration.ofMinutes(5), true, grace, key, StandardProfiles.NO_USER_PROFILES, StandardProfiles.CHECK);
     }
 
     private FamilyId fid;
