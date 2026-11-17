@@ -2,6 +2,8 @@ package dev.tessera.iam.adapter.rest.support;
 
 import dev.tessera.iam.application.ClientProfileCheck;
 
+import dev.tessera.iam.application.port.out.UserProfilePort;
+import dev.tessera.iam.domain.authflow.UserProfile;
 import dev.tessera.iam.domain.tenancy.RegisteredTenant;
 import dev.tessera.iam.domain.tenancy.SecurityProfile;
 import dev.tessera.iam.domain.tenancy.TenantStatus;
@@ -14,6 +16,9 @@ public final class StandardProfiles {
     /** Every tenant on {@code standard}, so every client conforms. */
     public static final ClientProfileCheck CHECK = new ClientProfileCheck(tenant -> Uni.createFrom().item(
             Optional.of(new RegisteredTenant(tenant, SecurityProfile.STANDARD, TenantStatus.ACTIVE))));
+
+    /** No user has a profile: ID tokens carry no email or name. */
+    public static final UserProfilePort NO_USER_PROFILES = (realm, subject) -> Uni.createFrom().item(UserProfile.EMPTY);
 
     private StandardProfiles() {
     }

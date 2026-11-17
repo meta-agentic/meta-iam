@@ -46,6 +46,7 @@ import dev.tessera.iam.application.port.out.RefreshTokenTenantResolverPort;
 import dev.tessera.iam.application.port.out.SessionStorePort;
 import dev.tessera.iam.application.port.out.TenantRegistryPort;
 import dev.tessera.iam.application.port.out.TokenSignerPort;
+import dev.tessera.iam.application.port.out.UserProfilePort;
 import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
@@ -121,6 +122,7 @@ public class UseCaseProducer {
     @Produces
     @ApplicationScoped
     TokenUseCase tokenUseCase(
+            UserProfilePort userProfiles,
             ClientProfileCheck profiles,
             TenantAdmission admission,
             ClientRepositoryPort clients,
@@ -149,7 +151,7 @@ public class UseCaseProducer {
                 authFlow.idTokenTtl(),
                 refresh.refreshTokenTtl(),
                 refresh.enabled(),
-                authFlow.requireSenderConstraint(), profiles));
+                authFlow.requireSenderConstraint(), userProfiles, profiles));
     }
 
     /**
@@ -165,6 +167,7 @@ public class UseCaseProducer {
     @ApplicationScoped
     @Startup
     RefreshUseCase refreshUseCase(
+            UserProfilePort userProfiles,
             ClientProfileCheck profiles,
             TenantAdmission admission,
             ClientRepositoryPort clients,
@@ -190,7 +193,7 @@ public class UseCaseProducer {
                 authFlow.idTokenTtl(),
                 refresh.enabled(),
                 refresh.reuseGrace(),
-                successorKey(refresh), profiles));
+                successorKey(refresh), userProfiles, profiles));
     }
 
     /**

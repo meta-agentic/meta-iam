@@ -3,6 +3,7 @@ package dev.tessera.iam.application;
 import dev.tessera.iam.domain.client.ClientUse;
 import io.smallrye.mutiny.Uni;
 import dev.tessera.iam.application.port.in.TokenUseCase;
+import dev.tessera.iam.application.port.out.UserProfilePort;
 import dev.tessera.iam.application.port.out.AuthorizationCodeStorePort;
 import dev.tessera.iam.application.port.out.ClientRepositoryPort;
 import dev.tessera.iam.application.port.out.ClientSecretVerifierPort;
@@ -61,6 +62,7 @@ public final class TokenService implements TokenUseCase {
     private static final String DPOP_HTM = "POST";
 
     private final ClientProfileCheck profiles;
+    private final UserProfilePort userProfiles;
     private final ClientRepositoryPort clients;
     private final AuthorizationCodeStorePort codeStore;
     private final ClientSecretVerifierPort secretVerifier;
@@ -92,10 +94,11 @@ public final class TokenService implements TokenUseCase {
             Duration idTokenTtl,
             Duration refreshTokenTtl,
             boolean refreshEnabled,
+            UserProfilePort userProfiles,
             ClientProfileCheck profiles) {
         this(clients, codeStore, secretVerifier, signer, dpop, identifiers, refreshStore, clock,
                 issuer, tokenEndpoint, accessTokenTtl, idTokenTtl, refreshTokenTtl, refreshEnabled,
-                true, profiles);
+                true, userProfiles, profiles);
     }
 
     /**
@@ -122,11 +125,13 @@ public final class TokenService implements TokenUseCase {
             Duration refreshTokenTtl,
             boolean refreshEnabled,
             boolean requireSenderConstraint,
+            UserProfilePort userProfiles,
             ClientProfileCheck profiles) {
         if (profiles == null) {
             throw new IllegalArgumentException("profiles must not be null");
         }
         this.profiles = profiles;
+        this.userProfiles = requireNonNull(userProfiles, "userProfiles");
         this.clients = requireNonNull(clients, "clients");
         this.codeStore = requireNonNull(codeStore, "codeStore");
         this.secretVerifier = requireNonNull(secretVerifier, "secretVerifier");
@@ -240,9 +245,9 @@ public final class TokenService implements TokenUseCase {
 
         boolean openId = scopes.contains("openid");
         Uni<String> idUni = openId
-                ? signer.sign(command.realm(), "JWT", IssuedTokenClaims.idToken(
-                        issuer, grant.subjectId(), command.clientId(), grant.nonce(),
-                        now, now.plus(idTokenTtl), command.realm()))
+                ? ProfileClaims.idToken(userProfiles, issuer, grant.subjectId(), command.clientId(),
+                                grant.nonce(), now, now.plus(idTokenTtl), command.realm(), scopes)
+                        .flatMap(claims -> signer.sign(command.realm(), "JWT", claims))
                 : Uni.createFrom().nullItem();
 
         Uni<String> refreshUni = mintRefreshToken(command, grant, client, now);

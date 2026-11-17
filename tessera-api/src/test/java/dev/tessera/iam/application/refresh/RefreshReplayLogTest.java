@@ -103,7 +103,7 @@ class RefreshReplayLogTest {
                 },
                 store,
                 id -> Uni.createFrom().item(Optional.of(REALM)),
-                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), true, StandardProfiles.CHECK);
+                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), true, StandardProfiles.NO_USER_PROFILES, StandardProfiles.CHECK);
         String wire = RefreshTokenCodec.assemble(fid, secret);
         RefreshCommand command = new RefreshCommand(REALM, wire, "gateway", "client-secret", null);
 

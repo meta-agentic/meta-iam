@@ -3,6 +3,7 @@ package dev.tessera.iam.application;
 import dev.tessera.iam.domain.client.ClientUse;
 import dev.tessera.iam.application.port.in.RefreshUseCase;
 import dev.tessera.iam.application.port.in.TokenUseCase.TokenResult;
+import dev.tessera.iam.application.port.out.UserProfilePort;
 import dev.tessera.iam.application.port.out.ClientRepositoryPort;
 import dev.tessera.iam.application.port.out.ClientSecretVerifierPort;
 import dev.tessera.iam.application.port.out.OpaqueIdentifierPort;
@@ -80,6 +81,7 @@ public final class RefreshService implements RefreshUseCase {
     private static final System.Logger LOG = System.getLogger(RefreshService.class.getName());
 
     private final ClientProfileCheck profiles;
+    private final UserProfilePort userProfiles;
     private final ClientRepositoryPort clients;
     private final ClientSecretVerifierPort secretVerifier;
     private final TokenSignerPort signer;
@@ -105,9 +107,10 @@ public final class RefreshService implements RefreshUseCase {
             String issuer,
             Duration accessTokenTtl,
             boolean enabled,
+            UserProfilePort userProfiles,
             ClientProfileCheck profiles) {
         this(clients, secretVerifier, signer, identifiers, refreshStore, tenantResolver, clock, issuer,
-                accessTokenTtl, accessTokenTtl, enabled, Duration.ZERO, null, profiles);
+                accessTokenTtl, accessTokenTtl, enabled, Duration.ZERO, null, userProfiles, profiles);
     }
 
     /**
@@ -133,11 +136,13 @@ public final class RefreshService implements RefreshUseCase {
             boolean enabled,
             Duration reuseGrace,
             byte[] successorKey,
+            UserProfilePort userProfiles,
             ClientProfileCheck profiles) {
         if (profiles == null) {
             throw new IllegalArgumentException("profiles must not be null");
         }
         this.profiles = profiles;
+        this.userProfiles = requireNonNull(userProfiles, "userProfiles");
         this.reuseGrace = requireNonNull(reuseGrace, "reuseGrace");
         if (reuseGrace.isNegative()) {
             throw new IllegalArgumentException("reuseGrace must not be negative");
@@ -290,9 +295,9 @@ public final class RefreshService implements RefreshUseCase {
         // Bearer.
         Uni<String> accessUni = signer.sign(authoritativeRealm, "at+jwt", accessClaims);
         Uni<String> idUni = family.grantedScopes().contains("openid")
-                ? signer.sign(authoritativeRealm, "JWT", IssuedTokenClaims.idToken(
-                        issuer, family.userId(), command.clientId(), null, now, now.plus(idTokenTtl),
-                        authoritativeRealm))
+                ? ProfileClaims.idToken(userProfiles, issuer, family.userId(), command.clientId(), null,
+                                now, now.plus(idTokenTtl), authoritativeRealm, family.grantedScopes())
+                        .flatMap(claims -> signer.sign(authoritativeRealm, "JWT", claims))
                 : Uni.createFrom().nullItem();
         return Uni.combine().all().unis(accessUni, idUni).asTuple()
                 .map(tuple -> new TokenResult.Issued(

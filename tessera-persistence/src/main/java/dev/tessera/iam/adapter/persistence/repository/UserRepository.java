@@ -73,6 +73,45 @@ public class UserRepository {
     }
 
     /**
+     * Sets a user's email, its verified flag and name, found by username within one realm. It
+     * changes nothing else about the user.
+     *
+     * @param tenantId      the owning tenant (the RLS scoping key)
+     * @param baselineId    the realm's baseline
+     * @param username      the login identifier of the user to change
+     * @param email         the address, or {@code null} to clear it
+     * @param emailVerified whether the address is verified
+     * @param name          the full name, or {@code null} to clear it
+     * @return a {@link Uni} emitting the user as it was before the change, or {@code null} when
+     *         no such user exists in the realm
+     */
+    public Uni<UserEntity> updateProfile(
+            UUID tenantId, UUID baselineId, String username, String email, boolean emailVerified, String name) {
+        return scoped.inTenant(tenantId, session ->
+                session.createQuery(
+                                "from UserEntity u where u.baselineId = :baseline and u.username = :username",
+                                UserEntity.class)
+                        .setParameter("baseline", baselineId)
+                        .setParameter("username", username)
+                        .getSingleResultOrNull()
+                        .map(user -> {
+                            if (user == null) {
+                                return null;
+                            }
+                            UserEntity before = new UserEntity();
+                            before.id = user.id;
+                            before.username = user.username;
+                            before.email = user.email;
+                            before.emailVerified = user.emailVerified;
+                            before.name = user.name;
+                            user.email = email;
+                            user.emailVerified = email != null && emailVerified;
+                            user.name = name;
+                            return before;
+                        }));
+    }
+
+    /**
      * Persists a new user.
      *
      * @param tenantId the owning tenant (the RLS scoping key)

@@ -65,5 +65,11 @@ public interface BootstrapConfig {
 
         /** The plaintext password, hashed before storage. */
         Optional<String> password();
+
+        /** The user's email address; an address set here counts as verified (operator-declared). */
+        Optional<String> email();
+
+        /** The user's full name. */
+        Optional<String> name();
     }
 }

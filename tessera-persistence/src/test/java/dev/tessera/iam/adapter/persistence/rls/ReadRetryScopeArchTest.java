@@ -55,6 +55,7 @@ class ReadRetryScopeArchTest {
             "CredentialRepository.persist",
             "OAuthClientRepository.persist",
             "UserRepository.persist",
+            "UserRepository.updateProfile",
             "KeyRotationService.mintPending",
             "KeyRotationService.promoteToActive",
             "FirstBootProvisioner.ensureSigningKey");

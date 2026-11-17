@@ -4,7 +4,9 @@ import dev.tessera.iam.domain.token.ClaimSet;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import dev.tessera.iam.domain.token.Confirmation;
 import java.time.Instant;
+import dev.tessera.iam.domain.authflow.UserProfile;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -180,6 +182,35 @@ public final class IssuedTokenClaims {
             throw new IllegalArgumentException("id-token realm must not be null");
         }
         return withRealm(idToken(issuer, subjectId, clientId, nonce, issuedAt, expiresAt), realm);
+    }
+
+    /** The ID-token claims {@link #withProfile} may add, in the order they are added. */
+    public static final List<String> PROFILE_CLAIMS = List.of("email", "email_verified", "name");
+
+    /**
+     * Adds the standard claims the granted scopes release from the user record (OIDC Core §5.4):
+     * {@code email} and {@code email_verified} under {@code email}, {@code name} under
+     * {@code profile}. A claim whose value is not set is left out, never sent empty. Applied before
+     * {@link #withRealm}, which always has the last word on the realm claims.
+     *
+     * @param claims  the ID-token claims (never {@code null})
+     * @param profile the user's profile (never {@code null}; {@link UserProfile#EMPTY} adds nothing)
+     * @param scopes  the granted scopes (never {@code null})
+     * @return the claims with the released profile claims set
+     */
+    public static ClaimSet withProfile(ClaimSet claims, UserProfile profile, Set<String> scopes) {
+        if (claims == null || profile == null || scopes == null) {
+            throw new IllegalArgumentException("claims, profile and scopes must not be null");
+        }
+        Map<String, Object> merged = new LinkedHashMap<>(claims.claims());
+        if (scopes.contains("email") && profile.email() != null) {
+            merged.put("email", profile.email());
+            merged.put("email_verified", profile.emailVerified());
+        }
+        if (scopes.contains("profile") && profile.name() != null) {
+            merged.put("name", profile.name());
+        }
+        return new ClaimSet(merged);
     }
 
     /**

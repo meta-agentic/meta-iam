@@ -41,6 +41,18 @@ public class UserEntity extends PanacheEntityBase {
     @Column(name = "username")
     public String username;
 
+    /** The address released under the {@code email} scope, or {@code null}. */
+    @Column(name = "email")
+    public String email;
+
+    /** Whether {@link #email} was verified; an operator-declared address is. */
+    @Column(name = "email_verified", nullable = false)
+    public boolean emailVerified;
+
+    /** The full name released under the {@code profile} scope, or {@code null}. */
+    @Column(name = "name")
+    public String name;
+
     /** Creation instant (UTC). */
     @Column(name = "created_at", nullable = false, updatable = false)
     public Instant createdAt;

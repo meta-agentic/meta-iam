@@ -201,6 +201,9 @@ public class FirstBootProvisioner {
                     user.baselineId = realm.baseline().value();
                     user.subjectId = UUID.randomUUID().toString();
                     user.username = username.get();
+                    user.email = present(cfg.email()).orElse(null);
+                    user.emailVerified = user.email != null;
+                    user.name = present(cfg.name()).orElse(null);
                     user.createdAt = Instant.now();
 
                     CredentialEntity credential = new CredentialEntity();

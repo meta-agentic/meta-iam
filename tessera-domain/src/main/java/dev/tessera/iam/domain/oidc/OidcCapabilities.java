@@ -30,6 +30,7 @@ import java.util.List;
  * @param idTokenSigningAlgValuesSupported the JWS algorithms used to sign ID Tokens
  * @param dpopSigningAlgValuesSupported    the JWS algorithms accepted for DPoP proofs
  * @param scopesSupported                  the OAuth2 scopes offered
+ * @param claimsSupported                  the claims the ID token can carry (OIDC Discovery §3)
  * @param tlsClientCertificateBoundAccessTokens whether the server issues certificate-bound
  *                                          (mTLS sender-constrained) access tokens
  */
@@ -43,6 +44,7 @@ public record OidcCapabilities(
         List<String> idTokenSigningAlgValuesSupported,
         List<String> dpopSigningAlgValuesSupported,
         List<String> scopesSupported,
+        List<String> claimsSupported,
         boolean tlsClientCertificateBoundAccessTokens) {
 
     public OidcCapabilities {
@@ -55,12 +57,17 @@ public record OidcCapabilities(
         idTokenSigningAlgValuesSupported = List.copyOf(idTokenSigningAlgValuesSupported);
         dpopSigningAlgValuesSupported = List.copyOf(dpopSigningAlgValuesSupported);
         scopesSupported = List.copyOf(scopesSupported);
+        claimsSupported = List.copyOf(claimsSupported);
     }
 
     /**
      * The JWS algorithms a {@code private_key_jwt} client assertion (RFC 7523) may be signed with:
      * asymmetric only, so neither {@code none} nor an HMAC keyed with a public key can verify.
      */
+    public static final List<String> ID_TOKEN_CLAIMS = List.of(
+            "iss", "sub", "aud", "iat", "exp", "nonce", "realm_tenant", "realm_baseline",
+            "email", "email_verified", "name");
+
     public static final List<String> CLIENT_ASSERTION_SIGNING_ALGS = List.of("ES256", "PS256", "RS256");
 
     /**
@@ -133,6 +140,9 @@ public record OidcCapabilities(
                 // a follow-up. "Discovery never lies": this list equals what is enforced.
                 List.of("ES256"),
                 List.of("openid", "profile", "email"),
+                // Exactly what an ID token can carry: the registered claims, the realm claims, and
+                // the profile claims the email and profile scopes release (IssuedTokenClaims).
+                ID_TOKEN_CLAIMS,
                 true);
     }
 
