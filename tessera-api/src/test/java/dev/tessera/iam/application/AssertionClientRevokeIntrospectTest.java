@@ -154,7 +154,7 @@ class AssertionClientRevokeIntrospectTest {
 
     private RevokeResult revoke(RealmKey realm, String clientId, String secret, String assertion, String token) {
         clearCalls();
-        return new RevokeService(clients, secrets, keys, assertions, refreshStore)
+        return new RevokeService(clients, secrets, keys, assertions, refreshStore, StandardProfiles.CHECK)
                 .revoke(new RevokeCommand(realm, token, null, clientId, secret, assertion))
                 .await().indefinitely();
     }
@@ -163,7 +163,7 @@ class AssertionClientRevokeIntrospectTest {
             String token) {
         clearCalls();
         return new IntrospectService(clients, secrets, keys, assertions, refreshStore, accessTokens,
-                Clock.systemUTC())
+                Clock.systemUTC(), StandardProfiles.CHECK)
                 .introspect(new IntrospectCommand(realm, token, null, clientId, secret, assertion))
                 .await().indefinitely();
     }

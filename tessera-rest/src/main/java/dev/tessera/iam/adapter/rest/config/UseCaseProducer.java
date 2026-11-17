@@ -6,6 +6,7 @@ import dev.tessera.iam.application.AdmittedClientCredentialsUseCase;
 import dev.tessera.iam.application.AdmittedRefreshUseCase;
 import dev.tessera.iam.application.AdmittedTokenUseCase;
 import dev.tessera.iam.application.ClientCredentialsService;
+import dev.tessera.iam.application.ClientProfileCheck;
 import dev.tessera.iam.application.ConsentService;
 import dev.tessera.iam.application.EndSessionService;
 import dev.tessera.iam.application.IntrospectService;
@@ -101,13 +102,26 @@ public class UseCaseProducer {
      */
     @Produces
     @ApplicationScoped
-    TenantAdmission tenantAdmission(TenantRegistryPort registry) {
-        return new TenantAdmission(registry);
+    @Startup
+    TenantAdmission tenantAdmission(TenantRegistryPort registry, SecurityConfig security) {
+        // Created at startup, so a minimum profile that cannot be served refuses to boot.
+        return new TenantAdmission(registry, security.minimum());
+    }
+
+    /**
+     * The one profile check every service that authenticates a client folds into its result
+     * (ADR-IAM-010 D2); {@code ClientProfileCheckArchTest} pins that each one depends on it.
+     */
+    @Produces
+    @ApplicationScoped
+    ClientProfileCheck clientProfileCheck(TenantRegistryPort registry) {
+        return new ClientProfileCheck(registry);
     }
 
     @Produces
     @ApplicationScoped
     TokenUseCase tokenUseCase(
+            ClientProfileCheck profiles,
             TenantAdmission admission,
             ClientRepositoryPort clients,
             AuthorizationCodeStorePort codeStore,
@@ -135,7 +149,7 @@ public class UseCaseProducer {
                 authFlow.idTokenTtl(),
                 refresh.refreshTokenTtl(),
                 refresh.enabled(),
-                authFlow.requireSenderConstraint()));
+                authFlow.requireSenderConstraint(), profiles));
     }
 
     /**
@@ -151,6 +165,7 @@ public class UseCaseProducer {
     @ApplicationScoped
     @Startup
     RefreshUseCase refreshUseCase(
+            ClientProfileCheck profiles,
             TenantAdmission admission,
             ClientRepositoryPort clients,
             ClientSecretVerifierPort secretVerifier,
@@ -175,7 +190,7 @@ public class UseCaseProducer {
                 authFlow.idTokenTtl(),
                 refresh.enabled(),
                 refresh.reuseGrace(),
-                successorKey(refresh)));
+                successorKey(refresh), profiles));
     }
 
     /**
@@ -205,6 +220,7 @@ public class UseCaseProducer {
     @Produces
     @ApplicationScoped
     ClientCredentialsUseCase clientCredentialsUseCase(
+            ClientProfileCheck profiles,
             TenantAdmission admission,
             ClientRepositoryPort clients,
             ClientSecretVerifierPort secretVerifier,
@@ -227,12 +243,13 @@ public class UseCaseProducer {
                 clock,
                 oidc.issuer(),
                 clientCredentials.accessTokenTtl(),
-                authFlow.requireSenderConstraint()));
+                authFlow.requireSenderConstraint(), profiles));
     }
 
     @Produces
     @ApplicationScoped
     RevokeUseCase revokeUseCase(
+            ClientProfileCheck profiles,
             ClientRepositoryPort clients,
             ClientSecretVerifierPort secretVerifier,
             ClientKeySourcePort keySource,
@@ -240,12 +257,13 @@ public class UseCaseProducer {
             RefreshTokenStorePort refreshStore) {
         // The same key source and assertion verifier (and so the same replay store) as the token
         // endpoint: an assertion is single use across /token, /introspect and /revoke.
-        return new RevokeService(clients, secretVerifier, keySource, assertionVerifier, refreshStore);
+        return new RevokeService(clients, secretVerifier, keySource, assertionVerifier, refreshStore, profiles);
     }
 
     @Produces
     @ApplicationScoped
     IntrospectUseCase introspectUseCase(
+            ClientProfileCheck profiles,
             ClientRepositoryPort clients,
             ClientSecretVerifierPort secretVerifier,
             ClientKeySourcePort keySource,
@@ -254,7 +272,7 @@ public class UseCaseProducer {
             AccessTokenIntrospectorPort accessTokens,
             Clock clock) {
         return new IntrospectService(
-                clients, secretVerifier, keySource, assertionVerifier, refreshStore, accessTokens, clock);
+                clients, secretVerifier, keySource, assertionVerifier, refreshStore, accessTokens, clock, profiles);
     }
 
     @Produces

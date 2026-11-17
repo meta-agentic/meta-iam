@@ -1,5 +1,6 @@
 package dev.tessera.iam.application;
 
+import dev.tessera.iam.domain.client.ClientUse;
 import dev.tessera.iam.application.port.in.IntrospectUseCase;
 import dev.tessera.iam.application.port.out.AccessTokenIntrospectorPort;
 import dev.tessera.iam.application.port.out.AccessTokenIntrospectorPort.VerifiedAccessToken;
@@ -47,6 +48,7 @@ import java.util.Optional;
  */
 public final class IntrospectService implements IntrospectUseCase {
 
+    private final ClientProfileCheck profiles;
     private final ClientRepositoryPort clients;
     private final ClientSecretVerifierPort secretVerifier;
     private final ClientKeySourcePort keySource;
@@ -62,7 +64,12 @@ public final class IntrospectService implements IntrospectUseCase {
             ClientAssertionVerifierPort assertionVerifier,
             RefreshTokenStorePort refreshStore,
             AccessTokenIntrospectorPort accessTokens,
-            Clock clock) {
+            Clock clock,
+            ClientProfileCheck profiles) {
+        if (profiles == null) {
+            throw new IllegalArgumentException("profiles must not be null");
+        }
+        this.profiles = profiles;
         this.clients = requireNonNull(clients, "clients");
         this.secretVerifier = requireNonNull(secretVerifier, "secretVerifier");
         this.keySource = requireNonNull(keySource, "keySource");
@@ -84,6 +91,8 @@ public final class IntrospectService implements IntrospectUseCase {
                 .flatMap(client -> ClientAuthentication.authenticate(secretVerifier, keySource,
                                 assertionVerifier, ReplayBudget.INTROSPECTION_AND_REVOCATION, command.realm(), command.clientId(), client,
                                 command.clientSecret(), command.secretPresentation(), command.clientAssertion(), false)
+                        .flatMap(authenticated -> profiles.andConforms(
+                                authenticated, command.realm(), client, ClientUse.ACTS_FOR_ITSELF))
                         .flatMap(ok -> ok ? classify(command) : authFailed()));
     }
 

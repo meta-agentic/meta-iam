@@ -1,5 +1,6 @@
 package dev.tessera.iam.application;
 
+import dev.tessera.iam.domain.client.ClientUse;
 import dev.tessera.iam.application.port.in.ClientCredentialsUseCase;
 import dev.tessera.iam.application.port.in.TokenUseCase.TokenResult;
 import dev.tessera.iam.application.port.out.ClaimSourcePort;
@@ -59,6 +60,7 @@ public final class ClientCredentialsService implements ClientCredentialsUseCase 
 
     private static final String TOKEN_TYPE_BEARER = "Bearer";
 
+    private final ClientProfileCheck profiles;
     private final ClientRepositoryPort clients;
     private final ClientSecretVerifierPort secretVerifier;
     private final ClientKeySourcePort keySource;
@@ -88,7 +90,12 @@ public final class ClientCredentialsService implements ClientCredentialsUseCase 
             Clock clock,
             String issuer,
             Duration accessTokenTtl,
-            boolean requireSenderConstraint) {
+            boolean requireSenderConstraint,
+            ClientProfileCheck profiles) {
+        if (profiles == null) {
+            throw new IllegalArgumentException("profiles must not be null");
+        }
+        this.profiles = profiles;
         this.clients = requireNonNull(clients, "clients");
         this.secretVerifier = requireNonNull(secretVerifier, "secretVerifier");
         this.keySource = requireNonNull(keySource, "keySource");
@@ -114,6 +121,7 @@ public final class ClientCredentialsService implements ClientCredentialsUseCase 
         requireNonNull(command, "command");
         return clients.findByClientId(command.realm(), command.clientId())
                 .flatMap(client -> authenticate(command, client)
+                        .flatMap(ok -> profiles.andConforms(ok, command.realm(), client, ClientUse.ACTS_FOR_ITSELF))
                         .flatMap(authenticated -> authenticated
                                 ? authorize(command, (ConfidentialClient) client)
                                 : failed(AuthorizationError.INVALID_CLIENT, "client authentication failed")));

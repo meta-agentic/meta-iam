@@ -1,5 +1,6 @@
 package dev.tessera.iam.application;
 
+import dev.tessera.iam.domain.client.ClientUse;
 import dev.tessera.iam.application.port.in.RefreshUseCase;
 import dev.tessera.iam.application.port.in.TokenUseCase.TokenResult;
 import dev.tessera.iam.application.port.out.ClientRepositoryPort;
@@ -78,6 +79,7 @@ public final class RefreshService implements RefreshUseCase {
 
     private static final System.Logger LOG = System.getLogger(RefreshService.class.getName());
 
+    private final ClientProfileCheck profiles;
     private final ClientRepositoryPort clients;
     private final ClientSecretVerifierPort secretVerifier;
     private final TokenSignerPort signer;
@@ -102,9 +104,10 @@ public final class RefreshService implements RefreshUseCase {
             Clock clock,
             String issuer,
             Duration accessTokenTtl,
-            boolean enabled) {
+            boolean enabled,
+            ClientProfileCheck profiles) {
         this(clients, secretVerifier, signer, identifiers, refreshStore, tenantResolver, clock, issuer,
-                accessTokenTtl, accessTokenTtl, enabled, Duration.ZERO, null);
+                accessTokenTtl, accessTokenTtl, enabled, Duration.ZERO, null, profiles);
     }
 
     /**
@@ -129,7 +132,12 @@ public final class RefreshService implements RefreshUseCase {
             Duration idTokenTtl,
             boolean enabled,
             Duration reuseGrace,
-            byte[] successorKey) {
+            byte[] successorKey,
+            ClientProfileCheck profiles) {
+        if (profiles == null) {
+            throw new IllegalArgumentException("profiles must not be null");
+        }
+        this.profiles = profiles;
         this.reuseGrace = requireNonNull(reuseGrace, "reuseGrace");
         if (reuseGrace.isNegative()) {
             throw new IllegalArgumentException("reuseGrace must not be negative");
@@ -186,6 +194,8 @@ public final class RefreshService implements RefreshUseCase {
                     return invalidGrant("refresh token is invalid");
                 }
                 return authenticate(authoritativeRealm, client, command.clientSecret(), command.secretPresentation())
+                        .flatMap(authenticated -> profiles.andConforms(
+                                authenticated, authoritativeRealm, client, ClientUse.ACTS_FOR_PERSON))
                         .flatMap(ok -> {
                     if (!ok) {
                         return invalidClient("client authentication failed");

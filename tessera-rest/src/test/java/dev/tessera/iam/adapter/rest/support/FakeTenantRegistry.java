@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class FakeTenantRegistry implements TenantRegistryPort {
 
-    private enum Answer { UNREGISTERED, SUSPENDED, UNAVAILABLE }
+    private enum Answer { UNREGISTERED, SUSPENDED, UNAVAILABLE, FAPI2 }
 
     private final Map<TenantId, Answer> overrides = new ConcurrentHashMap<>();
 
@@ -40,6 +40,11 @@ public class FakeTenantRegistry implements TenantRegistryPort {
         overrides.put(tenant, Answer.UNAVAILABLE);
     }
 
+    /** {@code tenant} is registered, active and on the {@code fapi2} profile. */
+    public void onFapi2(TenantId tenant) {
+        overrides.put(tenant, Answer.FAPI2);
+    }
+
     /** {@code tenant} is back to registered, standard and active. */
     public void restore(TenantId tenant) {
         overrides.remove(tenant);
@@ -56,6 +61,8 @@ public class FakeTenantRegistry implements TenantRegistryPort {
             case UNREGISTERED -> Uni.createFrom().item(Optional.empty());
             case SUSPENDED -> Uni.createFrom().item(Optional.of(
                     new RegisteredTenant(tenantId, SecurityProfile.STANDARD, TenantStatus.SUSPENDED)));
+            case FAPI2 -> Uni.createFrom().item(Optional.of(
+                    new RegisteredTenant(tenantId, SecurityProfile.FAPI2, TenantStatus.ACTIVE)));
             case UNAVAILABLE -> Uni.createFrom().failure(
                     new TenantRegistryUnavailableException(new IllegalStateException("registry is down")));
         };

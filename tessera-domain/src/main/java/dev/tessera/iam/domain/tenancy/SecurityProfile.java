@@ -26,6 +26,15 @@ public enum SecurityProfile {
         return wireName;
     }
 
+    /**
+     * Whether this profile is built and may be served. {@link #FAPI2} is not: until all of its
+     * requirements ship (ADR-IAM-010 plan step 7), a tenant on it is refused at use and a
+     * deployment minimum of it fails startup, so the name never claims what is not enforced.
+     */
+    public boolean isAvailable() {
+        return this == STANDARD;
+    }
+
     /** Whether this profile is less strict than {@code other}. */
     public boolean isBelow(SecurityProfile other) {
         return compareTo(other) < 0;

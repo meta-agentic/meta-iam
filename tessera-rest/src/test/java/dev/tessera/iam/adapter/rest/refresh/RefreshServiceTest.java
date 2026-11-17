@@ -1,5 +1,6 @@
 package dev.tessera.iam.adapter.rest.refresh;
 
+import dev.tessera.iam.adapter.rest.support.StandardProfiles;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tessera.iam.application.RefreshService;
@@ -87,7 +88,7 @@ class RefreshServiceTest {
 
     private RefreshService service() {
         return new RefreshService(clients, verifier, signer, ids, store, store,
-                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), true);
+                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), true, StandardProfiles.CHECK);
     }
 
     /** Seeds a live family owned by the confidential client in realm A, returns its wire token. */
@@ -190,7 +191,7 @@ class RefreshServiceTest {
     private RefreshService graceService() {
         return new RefreshService(clients, verifier, signer, ids, store, store,
                 Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5),
-                Duration.ofMinutes(5), true, Duration.ofSeconds(30), new byte[32]);
+                Duration.ofMinutes(5), true, Duration.ofSeconds(30), new byte[32], StandardProfiles.CHECK);
     }
 
     @Test
@@ -235,7 +236,7 @@ class RefreshServiceTest {
     void disabledRefusesRedemption() {
         String wire = seedFamily();
         RefreshService disabled = new RefreshService(clients, verifier, signer, ids, store, store,
-                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), false);
+                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), false, StandardProfiles.CHECK);
         TokenResult result = disabled
                 .redeem(new RefreshCommand(REALM_A, wire, CONF_WIRE, CORRECT_SECRET, null))
                 .await().indefinitely();

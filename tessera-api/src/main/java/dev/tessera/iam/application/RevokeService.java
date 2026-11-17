@@ -1,5 +1,6 @@
 package dev.tessera.iam.application;
 
+import dev.tessera.iam.domain.client.ClientUse;
 import dev.tessera.iam.application.port.in.RevokeUseCase;
 import dev.tessera.iam.application.port.out.ClientAssertionVerifierPort;
 import dev.tessera.iam.application.port.out.ClientAssertionVerifierPort.ReplayBudget;
@@ -45,6 +46,7 @@ import java.util.Optional;
  */
 public final class RevokeService implements RevokeUseCase {
 
+    private final ClientProfileCheck profiles;
     private final ClientRepositoryPort clients;
     private final ClientSecretVerifierPort secretVerifier;
     private final ClientKeySourcePort keySource;
@@ -56,7 +58,12 @@ public final class RevokeService implements RevokeUseCase {
             ClientSecretVerifierPort secretVerifier,
             ClientKeySourcePort keySource,
             ClientAssertionVerifierPort assertionVerifier,
-            RefreshTokenStorePort refreshStore) {
+            RefreshTokenStorePort refreshStore,
+            ClientProfileCheck profiles) {
+        if (profiles == null) {
+            throw new IllegalArgumentException("profiles must not be null");
+        }
+        this.profiles = profiles;
         this.clients = requireNonNull(clients, "clients");
         this.secretVerifier = requireNonNull(secretVerifier, "secretVerifier");
         this.keySource = requireNonNull(keySource, "keySource");
@@ -76,6 +83,8 @@ public final class RevokeService implements RevokeUseCase {
                 .flatMap(client -> ClientAuthentication.authenticate(secretVerifier, keySource,
                                 assertionVerifier, ReplayBudget.INTROSPECTION_AND_REVOCATION, command.realm(), command.clientId(), client,
                                 command.clientSecret(), command.secretPresentation(), command.clientAssertion(), true)
+                        .flatMap(authenticated -> profiles.andConforms(
+                                authenticated, command.realm(), client, ClientUse.ACTS_FOR_ITSELF))
                         .flatMap(ok -> ok
                                 ? revokeIfOwnedRefreshToken(command.realm(), client, command.token())
                                         .replaceWith(done())
