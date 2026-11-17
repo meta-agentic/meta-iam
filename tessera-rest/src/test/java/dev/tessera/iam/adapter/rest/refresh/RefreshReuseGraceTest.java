@@ -1,5 +1,6 @@
 package dev.tessera.iam.adapter.rest.refresh;
 
+import dev.tessera.iam.adapter.rest.support.StandardProfiles;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -96,7 +97,7 @@ class RefreshReuseGraceTest {
 
     private RefreshService service(Duration grace, byte[] key) {
         return new RefreshService(clients, verifier, signer, ids, store, store, clock,
-                "https://issuer.test", Duration.ofMinutes(5), Duration.ofMinutes(5), true, grace, key);
+                "https://issuer.test", Duration.ofMinutes(5), Duration.ofMinutes(5), true, grace, key, StandardProfiles.CHECK);
     }
 
     private FamilyId fid;

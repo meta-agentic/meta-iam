@@ -33,11 +33,29 @@ class TenantAdmissionTest {
 
     private static TenantAdmission admission(Uni<Optional<RegisteredTenant>> answer) {
         TenantRegistryPort registry = tenant -> answer;
-        return new TenantAdmission(registry);
+        return new TenantAdmission(registry, SecurityProfile.STANDARD);
     }
 
     private static Uni<Optional<RegisteredTenant>> registered(TenantStatus status) {
         return Uni.createFrom().item(Optional.of(new RegisteredTenant(TENANT, SecurityProfile.STANDARD, status)));
+    }
+
+    @Test
+    @DisplayName("a tenant on fapi2 is refused while fapi2 is not available, and the grant never runs")
+    void fapi2_isRefusedUntilAvailable() {
+        Uni<Optional<RegisteredTenant>> fapi2 = Uni.createFrom().item(
+                Optional.of(new RegisteredTenant(TENANT, SecurityProfile.FAPI2, TenantStatus.ACTIVE)));
+        TokenResult result = admission(fapi2).admit(TENANT, this::grant).await().indefinitely();
+        assertThat(result).isInstanceOf(TokenResult.Failed.class);
+        assertThat(grantRuns).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("a minimum that is not available is refused at construction, so startup fails")
+    void unavailableMinimum_isRefused() {
+        TenantRegistryPort registry = tenant -> Uni.createFrom().item(Optional.empty());
+        assertThatThrownBy(() -> new TenantAdmission(registry, SecurityProfile.FAPI2))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

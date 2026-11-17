@@ -1,5 +1,6 @@
 package dev.tessera.iam.application.refresh;
 
+import dev.tessera.iam.application.StandardProfiles;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tessera.iam.application.RefreshService;
@@ -102,7 +103,7 @@ class RefreshReplayLogTest {
                 },
                 store,
                 id -> Uni.createFrom().item(Optional.of(REALM)),
-                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), true);
+                Clock.fixed(T0, ZoneOffset.UTC), "https://issuer.test", Duration.ofMinutes(5), true, StandardProfiles.CHECK);
         String wire = RefreshTokenCodec.assemble(fid, secret);
         RefreshCommand command = new RefreshCommand(REALM, wire, "gateway", "client-secret", null);
 

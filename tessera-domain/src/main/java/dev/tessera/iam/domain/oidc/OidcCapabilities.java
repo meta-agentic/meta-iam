@@ -1,6 +1,7 @@
 package dev.tessera.iam.domain.oidc;
 
 import dev.tessera.iam.domain.signingkey.SigningAlgorithm;
+import dev.tessera.iam.domain.tenancy.SecurityProfile;
 import java.util.Arrays;
 import java.util.List;
 
@@ -96,6 +97,22 @@ public record OidcCapabilities(
      * @return the enforced capability set
      */
     public static OidcCapabilities enforced(boolean clientCredentials) {
+        return enforced(SecurityProfile.STANDARD, clientCredentials);
+    }
+
+    /**
+     * The capability set a tenant's security profile enforces (ADR-IAM-010 D2). Discovery
+     * advertises exactly this, so a profile that is not built has no capability set.
+     *
+     * @param profile           the tenant's profile (never {@code null})
+     * @param clientCredentials whether the token endpoint serves {@code client_credentials}
+     * @return the enforced capability set
+     * @throws IllegalArgumentException if the profile is not available
+     */
+    public static OidcCapabilities enforced(SecurityProfile profile, boolean clientCredentials) {
+        if (profile == null || !profile.isAvailable()) {
+            throw new IllegalArgumentException("no capability set for an unavailable profile: " + profile);
+        }
         List<String> asymmetricSigningAlgs = asymmetricSigningAlgValues();
         List<String> grants = clientCredentials
                 ? List.of("authorization_code", "refresh_token", "client_credentials")

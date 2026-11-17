@@ -1,5 +1,6 @@
 package dev.tessera.iam.application;
 
+import dev.tessera.iam.domain.client.ClientUse;
 import io.smallrye.mutiny.Uni;
 import dev.tessera.iam.application.port.in.TokenUseCase;
 import dev.tessera.iam.application.port.out.AuthorizationCodeStorePort;
@@ -59,6 +60,7 @@ public final class TokenService implements TokenUseCase {
     /** RFC 9449 §4.2: the token endpoint binds proofs to the POST method. */
     private static final String DPOP_HTM = "POST";
 
+    private final ClientProfileCheck profiles;
     private final ClientRepositoryPort clients;
     private final AuthorizationCodeStorePort codeStore;
     private final ClientSecretVerifierPort secretVerifier;
@@ -89,10 +91,11 @@ public final class TokenService implements TokenUseCase {
             Duration accessTokenTtl,
             Duration idTokenTtl,
             Duration refreshTokenTtl,
-            boolean refreshEnabled) {
+            boolean refreshEnabled,
+            ClientProfileCheck profiles) {
         this(clients, codeStore, secretVerifier, signer, dpop, identifiers, refreshStore, clock,
                 issuer, tokenEndpoint, accessTokenTtl, idTokenTtl, refreshTokenTtl, refreshEnabled,
-                true);
+                true, profiles);
     }
 
     /**
@@ -118,7 +121,12 @@ public final class TokenService implements TokenUseCase {
             Duration idTokenTtl,
             Duration refreshTokenTtl,
             boolean refreshEnabled,
-            boolean requireSenderConstraint) {
+            boolean requireSenderConstraint,
+            ClientProfileCheck profiles) {
+        if (profiles == null) {
+            throw new IllegalArgumentException("profiles must not be null");
+        }
+        this.profiles = profiles;
         this.clients = requireNonNull(clients, "clients");
         this.codeStore = requireNonNull(codeStore, "codeStore");
         this.secretVerifier = requireNonNull(secretVerifier, "secretVerifier");
@@ -170,6 +178,7 @@ public final class TokenService implements TokenUseCase {
                         return invalidGrant("authorization code was issued to a different client");
                     }
                     return authenticateClient(command, client)
+                            .flatMap(ok -> profiles.andConforms(ok, command.realm(), client, ClientUse.ACTS_FOR_PERSON))
                             .flatMap(authenticated -> authenticated
                                     ? issueTokens(command, grant, client)
                                     : invalidClient("client authentication failed"));

@@ -1,5 +1,6 @@
 package dev.tessera.iam.adapter.rest;
 
+import dev.tessera.iam.domain.tenancy.SecurityProfile;
 import io.smallrye.mutiny.Uni;
 import dev.tessera.iam.adapter.rest.config.ClientCredentialsConfig;
 import dev.tessera.iam.adapter.rest.config.OidcDiscoveryConfig;
@@ -75,7 +76,10 @@ public class DiscoveryResource {
         // issuer), never the Host header.
         RealmKey realm = tenantContext.realm();
         String issuer = issuerFor(realm);
-        DiscoveryDocument doc = DiscoveryDocument.forIssuer(issuer, OidcCapabilities.enforced(clientCredentials.enabled()));
+        // One document for the deployment. Every tenant it serves is on standard: fapi2 is refused
+        // until it is built, so the standard capability set is exactly what is enforced.
+        DiscoveryDocument doc = DiscoveryDocument.forIssuer(
+                issuer, OidcCapabilities.enforced(SecurityProfile.STANDARD, clientCredentials.enabled()));
         DiscoveryDto dto = DiscoveryDto.from(doc);
         return Uni.createFrom().item(
                 RestResponse.ResponseBuilder.ok(dto)

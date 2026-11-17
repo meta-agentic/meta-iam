@@ -100,6 +100,30 @@ class TenantAdmissionFlowTest {
     }
 
     @Test
+    @DisplayName("a tenant on fapi2 is refused at /token while fapi2 is not available")
+    void fapi2Tenant_isRefusedAtToken() {
+        registry.onFapi2(TenantId.fromString(TENANT));
+        clientCredentialsRequest().then().statusCode(401).body("error", Matchers.equalTo("invalid_client"));
+    }
+
+    @Test
+    @DisplayName("a client of a fapi2 tenant fails authentication at /introspect and /revoke")
+    void fapi2Tenant_isRefusedAtIntrospectAndRevoke() {
+        String accessToken = clientCredentialsRequest().jsonPath().getString("access_token");
+        registry.onFapi2(TenantId.fromString(TENANT));
+        for (String endpoint : new String[] {"/introspect", "/revoke"}) {
+            given()
+                    .header("X-Tenant-Id", TENANT)
+                    .contentType("application/x-www-form-urlencoded")
+                    .formParam("token", accessToken)
+                    .auth().preemptive().basic(FakeClientRepository.MACHINE_CLIENT_ID,
+                            FakeClientSecretVerifier.CORRECT_SECRET)
+                    .when().post(endpoint)
+                    .then().statusCode(401).body("error", Matchers.equalTo("invalid_client"));
+        }
+    }
+
+    @Test
     @DisplayName("every grant that mints a token is wired through the admission")
     void everyMintingGrant_isAdmitted() {
         assertThat(ClientProxy.unwrap(tokens)).isInstanceOf(AdmittedTokenUseCase.class);

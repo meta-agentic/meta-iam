@@ -107,14 +107,14 @@ class UniformClientAuthenticationTest {
 
     private IntrospectionResult introspect(RealmKey realm, String clientId, String secret) {
         verified.clear();
-        return new IntrospectService(clients, verifier, keys, assertions, refreshStore, accessTokens, Clock.systemUTC())
+        return new IntrospectService(clients, verifier, keys, assertions, refreshStore, accessTokens, Clock.systemUTC(), StandardProfiles.CHECK)
                 .introspect(new IntrospectCommand(realm, "a.b.c", null, clientId, secret))
                 .await().indefinitely();
     }
 
     private RevokeResult revoke(RealmKey realm, String clientId, String secret) {
         verified.clear();
-        return new RevokeService(clients, verifier, keys, assertions, refreshStore)
+        return new RevokeService(clients, verifier, keys, assertions, refreshStore, StandardProfiles.CHECK)
                 .revoke(new RevokeCommand(realm, "a.b.c", null, clientId, secret))
                 .await().indefinitely();
     }

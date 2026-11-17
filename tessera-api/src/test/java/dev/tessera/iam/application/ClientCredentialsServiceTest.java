@@ -150,7 +150,7 @@ class ClientCredentialsServiceTest {
             return Uni.createFrom().item(trust != null && GOOD_ASSERTION.equals(assertion));
         };
         return new ClientCredentialsService(clients, secrets, keys, assertions, claimSource, signer, ids,
-                Clock.fixed(NOW, ZoneOffset.UTC), ISSUER, TTL, requireSenderConstraint);
+                Clock.fixed(NOW, ZoneOffset.UTC), ISSUER, TTL, requireSenderConstraint, StandardProfiles.CHECK);
     }
 
     private TokenResult issue(String clientId, String secret, String scope, List<String> resources) {
