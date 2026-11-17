@@ -189,7 +189,7 @@ public class FirstBootProvisioner {
         String password = present(cfg.password()).orElseThrow(() -> new IllegalStateException(
                 "iam.bootstrap.user.password is required when iam.bootstrap.user.username is set"));
         UUID tenant = realm.tenant().value();
-        return users.findByUsername(tenant, username.get())
+        return users.findByUsername(tenant, realm.baseline().value(), username.get())
                 .chain(existing -> {
                     if (existing != null) {
                         LOG.infof("bootstrap: user %s already exists", username.get());

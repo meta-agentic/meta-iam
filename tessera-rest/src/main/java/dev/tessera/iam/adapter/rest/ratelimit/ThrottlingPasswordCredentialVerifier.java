@@ -48,7 +48,7 @@ public class ThrottlingPasswordCredentialVerifier implements PasswordCredentialV
             return delegate.verify(realm, username, password);
         }
 
-        CredentialKey key = new CredentialKey(realm.tenant().value(), username);
+        CredentialKey key = new CredentialKey(realm.tenant().value(), realm.baseline().value(), username);
         TokenBucket budget = budgets.budgetFor(key, config);
         if (budget == null) {
             // The budget table is full: verify without a budget, as for any new username at the cap.
@@ -68,7 +68,11 @@ public class ThrottlingPasswordCredentialVerifier implements PasswordCredentialV
                 });
     }
 
-    /** Composite key: a failure budget is scoped to one username within one tenant. */
-    private record CredentialKey(UUID tenant, String username) {
+    /**
+     * Composite key: a failure budget is scoped to one username within one realm. A username is
+     * unique per (tenant, baseline), so the baseline is part of the key: failures in one baseline
+     * never spend another baseline's budget for the same name.
+     */
+    private record CredentialKey(UUID tenant, UUID baseline, String username) {
     }
 }
