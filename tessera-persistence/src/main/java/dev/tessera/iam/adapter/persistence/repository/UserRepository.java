@@ -22,16 +22,21 @@ public class UserRepository {
     TenantScopedSession scoped;
 
     /**
-     * Finds a user by its stable OIDC {@code sub} within the tenant.
+     * Finds a user by its stable OIDC {@code sub} within one realm. {@code sub} is unique only per
+     * {@code (tenant, baseline)}, so the baseline is part of the match: a user of another baseline
+     * of the same tenant is never found.
      *
-     * @param tenantId  the owning tenant (the RLS scoping key)
-     * @param subjectId the stable {@code sub} to match
+     * @param tenantId   the owning tenant (the RLS scoping key)
+     * @param baselineId the realm's baseline
+     * @param subjectId  the stable {@code sub} to match
      * @return a {@link Uni} emitting the user, or {@code null} if none matches
      */
-    public Uni<UserEntity> findBySubject(UUID tenantId, String subjectId) {
+    public Uni<UserEntity> findBySubject(UUID tenantId, UUID baselineId, String subjectId) {
         return scoped.inTenantRead(tenantId, session ->
                 session.createQuery(
-                                "from UserEntity u where u.subjectId = :sub", UserEntity.class)
+                                "from UserEntity u where u.baselineId = :baseline and u.subjectId = :sub",
+                                UserEntity.class)
+                        .setParameter("baseline", baselineId)
                         .setParameter("sub", subjectId)
                         .getSingleResultOrNull());
     }
@@ -48,16 +53,21 @@ public class UserRepository {
     }
 
     /**
-     * Finds a user by its login identifier within the tenant.
+     * Finds a user by its login identifier within one realm. A username is unique per
+     * {@code (tenant, baseline)} (V17), so a user of another baseline of the same tenant is never
+     * found and cannot sign in there.
      *
-     * @param tenantId the owning tenant (the RLS scoping key)
-     * @param username the login identifier to match
+     * @param tenantId   the owning tenant (the RLS scoping key)
+     * @param baselineId the realm's baseline
+     * @param username   the login identifier to match
      * @return a {@link Uni} emitting the user, or {@code null} if none matches
      */
-    public Uni<UserEntity> findByUsername(UUID tenantId, String username) {
+    public Uni<UserEntity> findByUsername(UUID tenantId, UUID baselineId, String username) {
         return scoped.inTenantRead(tenantId, session ->
                 session.createQuery(
-                                "from UserEntity u where u.username = :username", UserEntity.class)
+                                "from UserEntity u where u.baselineId = :baseline and u.username = :username",
+                                UserEntity.class)
+                        .setParameter("baseline", baselineId)
                         .setParameter("username", username)
                         .getSingleResultOrNull());
     }

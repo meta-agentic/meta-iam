@@ -72,7 +72,7 @@ public class Argon2PasswordCredentialVerifier implements PasswordCredentialVerif
             throw new IllegalArgumentException("realm, username and password must not be null");
         }
         UUID tenantId = realm.tenant().value();
-        return users.findByUsername(tenantId, username)
+        return users.findByUsername(tenantId, realm.baseline().value(), username)
                 .flatMap(user -> credentials.findByUser(tenantId, userId(user))
                         .map(Argon2PasswordCredentialVerifier::storedHash)
                         .flatMap(storedHash -> argon2.run(tenantId, () -> check(storedHash, password)))

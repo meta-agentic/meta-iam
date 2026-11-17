@@ -52,7 +52,7 @@ public class PersistentConsentStore implements ConsentStorePort {
     public Uni<Boolean> hasConsent(RealmKey realm, String subjectId, ClientId clientId, Set<String> scopes) {
         validate(realm, subjectId, clientId, scopes);
         UUID tenantId = realm.tenant().value();
-        return users.findBySubject(tenantId, subjectId)
+        return users.findBySubject(tenantId, realm.baseline().value(), subjectId)
                 .flatMap(user -> user == null
                         ? Uni.createFrom().item(false)
                         : consents.findByUserAndClient(tenantId, user.id, clientId.value())
@@ -63,7 +63,7 @@ public class PersistentConsentStore implements ConsentStorePort {
     public Uni<Void> grant(RealmKey realm, String subjectId, ClientId clientId, Set<String> scopes) {
         validate(realm, subjectId, clientId, scopes);
         UUID tenantId = realm.tenant().value();
-        return users.findBySubject(tenantId, subjectId)
+        return users.findBySubject(tenantId, realm.baseline().value(), subjectId)
                 .flatMap(user -> {
                     if (user == null) {
                         // No user row to attach the consent to — nothing durable to record.

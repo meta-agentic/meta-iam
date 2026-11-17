@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * same mechanism as the client-secret path's
  * {@code ThrottlingClientSecretVerifier}/{@code CredentialThrottleTest}) rather than a second
  * one. With a failure burst of 3 and a negligible refill, after three wrong passwords for one
- * {@code (tenant, username)} the budget is spent, so the next attempt short-circuits to
+ * {@code (tenant, baseline, username)} the budget is spent, so the next attempt short-circuits to
  * {@code invalid_credentials} <em>without invoking the delegate verifier</em> — proven
  * behaviourally exactly as {@code CredentialThrottleTest} proves it for {@code /token}: once
  * spent, even the CORRECT password is refused.
@@ -68,6 +68,30 @@ class LoginThrottleTest {
         login(UUID.randomUUID().toString(), FakePasswordCredentialVerifier.USERNAME,
                 FakePasswordCredentialVerifier.CORRECT_PASSWORD)
                 .then().statusCode(204);
+    }
+
+    @Test
+    @DisplayName("another baseline of the same tenant is not affected by one baseline's spent budget")
+    void throttleIsPerBaseline() {
+        String tenant = UUID.randomUUID().toString();
+        String spent = UUID.randomUUID().toString();
+        for (int i = 0; i < 3; i++) {
+            login(tenant, spent, FakePasswordCredentialVerifier.USERNAME, "nope-" + i);
+        }
+        login(tenant, spent, FakePasswordCredentialVerifier.USERNAME, FakePasswordCredentialVerifier.CORRECT_PASSWORD)
+                .then().statusCode(401);
+
+        login(tenant, UUID.randomUUID().toString(), FakePasswordCredentialVerifier.USERNAME,
+                FakePasswordCredentialVerifier.CORRECT_PASSWORD)
+                .then().statusCode(204);
+    }
+
+    private static Response login(String tenant, String baseline, String username, String password) {
+        return given().header("X-Tenant-Id", tenant).header("X-Baseline-Id", baseline)
+                .contentType("application/x-www-form-urlencoded")
+                .formParam("username", username)
+                .formParam("password", password)
+                .when().post("/login");
     }
 
     private static Response login(String tenant, String username, String password) {
