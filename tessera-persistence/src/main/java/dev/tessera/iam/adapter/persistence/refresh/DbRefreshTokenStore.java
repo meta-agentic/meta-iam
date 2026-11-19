@@ -229,6 +229,8 @@ public class DbRefreshTokenStore implements RefreshTokenStorePort {
         e.rotationSalt = family.rotationSalt();
         e.grantedScope = family.grantedScopes().isEmpty()
                 ? null : String.join(" ", new TreeSet<>(family.grantedScopes()));
+        e.grantedResources = family.grantedResources().isEmpty()
+                ? null : String.join(" ", new TreeSet<>(family.grantedResources()));
         return e;
     }
 
@@ -241,6 +243,8 @@ public class DbRefreshTokenStore implements RefreshTokenStorePort {
                 e.currentTokenHash, e.previousTokenHash, e.generation, e.reused,
                 e.createdAt, e.expiresAt, e.rotatedAt, e.rotationSalt,
                 e.grantedScope == null || e.grantedScope.isBlank()
-                        ? Set.of() : Set.of(e.grantedScope.trim().split(" +")));
+                        ? Set.of() : Set.of(e.grantedScope.trim().split(" +")),
+                e.grantedResources == null || e.grantedResources.isBlank()
+                        ? Set.of() : Set.of(e.grantedResources.trim().split(" +")));
     }
 }

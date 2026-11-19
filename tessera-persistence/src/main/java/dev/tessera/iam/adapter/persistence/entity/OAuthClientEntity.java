@@ -139,6 +139,17 @@ public class OAuthClientEntity extends PanacheEntityBase {
     @Column(name = "user_scopes")
     public String userScopes;
 
+    /**
+     * Whitespace-separated resources a token issued for a person may name (ADR-IAM-009 D3); empty
+     * for none, never {@code null} in the database.
+     */
+    @Column(name = "user_audiences", nullable = false)
+    public String userAudiences = "";
+
+    /** The resource this client is, for the audience comparison at introspection; {@code null} for none. */
+    @Column(name = "resource_identifier")
+    public String resourceIdentifier;
+
     /** Creation instant (UTC). */
     @Column(name = "created_at", nullable = false, updatable = false)
     public Instant createdAt;

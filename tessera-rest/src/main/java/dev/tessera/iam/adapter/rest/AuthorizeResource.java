@@ -30,6 +30,7 @@ import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
@@ -108,7 +109,8 @@ public class AuthorizeResource {
             @QueryParam("state") String state,
             @QueryParam("nonce") String nonce,
             @QueryParam("code_challenge") String codeChallenge,
-            @QueryParam("code_challenge_method") String codeChallengeMethod) {
+            @QueryParam("code_challenge_method") String codeChallengeMethod,
+            @QueryParam("resource") List<String> resources) {
 
         RealmKey realm = tenantContext.realm();
 
@@ -168,7 +170,11 @@ public class AuthorizeResource {
                     // PKCE, which is what actually binds this code to this client, stays
                     // mandatory and unchanged.
                     isBlank(nonce) ? null : nonce,
-                    CodeChallenge.s256(codeChallenge));
+                    CodeChallenge.s256(codeChallenge),
+                    // RFC 8707 resource indicators, verbatim; whether each is registered for the
+                    // client is the application's check (invalid_target). An empty value counts as
+                    // omitted (RFC 6749 §3.1).
+                    resourcesOf(resources));
         } catch (IllegalArgumentException ex) {
             // A malformed challenge (wrong length / alphabet) or other structural problem.
             return badRequest(AuthorizationError.INVALID_REQUEST, ex.getMessage());
@@ -245,5 +251,17 @@ public class AuthorizeResource {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static Set<String> resourcesOf(List<String> values) {
+        Set<String> resources = new LinkedHashSet<>();
+        if (values != null) {
+            for (String value : values) {
+                if (!isBlank(value)) {
+                    resources.add(value);
+                }
+            }
+        }
+        return resources;
     }
 }

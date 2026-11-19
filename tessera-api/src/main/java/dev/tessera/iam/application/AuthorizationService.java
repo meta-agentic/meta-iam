@@ -9,10 +9,12 @@ import dev.tessera.iam.application.port.out.OpaqueIdentifierPort;
 import dev.tessera.iam.domain.authcode.AuthorizationGrant;
 import dev.tessera.iam.domain.authcode.AuthorizationRequest;
 import dev.tessera.iam.domain.client.Client;
+import dev.tessera.iam.domain.client.ResourceIndicators;
 import io.smallrye.mutiny.Uni;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 
 /**
  * Application service for the authorization endpoint: validates an authorization request
@@ -89,10 +91,23 @@ public final class AuthorizationService implements AuthorizeUseCase {
                 request.nonce(),
                 request.codeChallenge(),
                 now,
-                now.plus(codeTtl));
+                now.plus(codeTtl),
+                grantSet(request, client));
         String code = identifiers.newAuthorizationCode();
         return codeStore.store(code, grant)
                 .replaceWith(success(code, request.state()));
+    }
+
+    /**
+     * The grant's resource set (ADR-IAM-009 D3): the named resources, or the client's whole list.
+     * {@link ClientRequestCheck} has already refused a request for which there is none.
+     */
+    private static Set<String> grantSet(AuthorizationRequest request, Client client) {
+        return switch (ResourceIndicators.grantSet(request.resources(), client.userAudiences())) {
+            case ResourceIndicators.Outcome.Granted granted -> granted.resources();
+            case ResourceIndicators.Outcome.Refused refused ->
+                    throw new IllegalStateException("a refused request reached code issuance: " + refused.description());
+        };
     }
 
     private static Uni<AuthorizeResult> success(String code, String state) {

@@ -48,6 +48,9 @@ import org.junit.jupiter.api.Test;
 @DisplayName("RefreshService — a replay revocation is logged once")
 class RefreshReplayLogTest {
 
+    /** The one resource the client is registered for and the family was granted. */
+    private static final String API = "https://api.example/";
+
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
     private static final RealmKey REALM =
             new RealmKey(new TenantId(UUID.randomUUID()), new BaselineId(UUID.randomUUID()));
@@ -87,11 +90,13 @@ class RefreshReplayLogTest {
         FamilyId fid = new FamilyId(UUID.randomUUID());
         String secret = "seed-secret-" + UUID.randomUUID();
         store.family = new RefreshTokenFamily(fid, REALM, UUID.randomUUID().toString(), CLIENT_ID,
-                RefreshTokenCodec.sha256(secret), null, 0, false, T0, T0.plusSeconds(3600));
+                RefreshTokenCodec.sha256(secret), null, 0, false, T0, T0.plusSeconds(3600), null, null,
+                Set.of(), Set.of(API));
         RefreshService service = new RefreshService(
                 (realm, clientId) -> Uni.createFrom().item(new ConfidentialClient(CLIENT_ID, realm,
                         Set.of(new AuthorizationCode(), new RefreshToken()),
-                        ClientAuthMethod.CLIENT_SECRET_POST, Set.of("https://c/cb"))),
+                        ClientAuthMethod.CLIENT_SECRET_POST, Set.of("https://c/cb"), Set.of(), Set.of(), List.of(),
+                        Set.of(), null, Set.of(), Set.of(API))),
                 (realm, clientId, presented) -> Uni.createFrom().item(Boolean.TRUE),
                 (realm, typ, claims) -> Uni.createFrom().item("signed.jwt"),
                 new OpaqueIdentifierPort() {

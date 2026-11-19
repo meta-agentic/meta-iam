@@ -25,6 +25,10 @@ import java.util.Set;
  *                      for the end-session endpoint); defensively copied and exposed
  *                      unmodifiable (never {@code null}, may be empty)
  * @param signInTheme   the theme its sign-in page shows ({@code null} when it names none)
+ * @param userScopes    the scopes it may request for a person, besides {@code openid}
+ * @param userAudiences the resources a token issued for a person may name (ADR-IAM-009 D3); each
+ *                      an absolute URI with no fragment (never {@code null}, may be empty: such a
+ *                      client obtains no token for a person)
  */
 public record PublicClient(
         ClientId id,
@@ -33,7 +37,20 @@ public record PublicClient(
         Set<String> redirectUris,
         Set<String> postLogoutRedirectUris,
         SignInTheme signInTheme,
-        Set<String> userScopes) implements Client {
+        Set<String> userScopes,
+        Set<String> userAudiences) implements Client {
+
+    /** A client with no resource registered for tokens issued for a person. */
+    public PublicClient(
+            ClientId id,
+            RealmKey realm,
+            Set<GrantType> allowedGrants,
+            Set<String> redirectUris,
+            Set<String> postLogoutRedirectUris,
+            SignInTheme signInTheme,
+            Set<String> userScopes) {
+        this(id, realm, allowedGrants, redirectUris, postLogoutRedirectUris, signInTheme, userScopes, Set.of());
+    }
 
     /** A client with no scopes registered for tokens issued for a person: it may ask only for {@code openid}. */
     public PublicClient(
@@ -90,6 +107,15 @@ public record PublicClient(
         allowedGrants = Collections.unmodifiableSet(new HashSet<>(allowedGrants));
         redirectUris = Collections.unmodifiableSet(new LinkedHashSet<>(redirectUris));
         postLogoutRedirectUris = Collections.unmodifiableSet(new LinkedHashSet<>(postLogoutRedirectUris));
+        if (userAudiences == null) {
+            throw new IllegalArgumentException("PublicClient userAudiences must not be null");
+        }
+        for (String audience : userAudiences) {
+            if (!ResourceIndicators.isResourceIdentifier(audience)) {
+                throw new IllegalArgumentException("PublicClient userAudiences holds an invalid resource: " + audience);
+            }
+        }
         userScopes = Collections.unmodifiableSet(new LinkedHashSet<>(userScopes));
+        userAudiences = Collections.unmodifiableSet(new LinkedHashSet<>(userAudiences));
     }
 }

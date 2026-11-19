@@ -36,6 +36,10 @@ import java.util.Set;
  *                      for the end-session endpoint); defensively copied and exposed
  *                      unmodifiable (never {@code null}, may be empty)
  * @param signInTheme   the theme its sign-in page shows ({@code null} when it names none)
+ * @param userScopes    the scopes it may request for a person, besides {@code openid}
+ * @param userAudiences the resources a token issued for a person may name (ADR-IAM-009 D3); each
+ *                      an absolute URI with no fragment, never fed by {@code audiences} (never
+ *                      {@code null}, may be empty: such a client obtains no token for a person)
  */
 public record ConfidentialClient(
         ClientId id,
@@ -48,7 +52,25 @@ public record ConfidentialClient(
         List<String> roles,
         Set<String> postLogoutRedirectUris,
         SignInTheme signInTheme,
-        Set<String> userScopes) implements Client {
+        Set<String> userScopes,
+        Set<String> userAudiences) implements Client {
+
+    /** A client with no resource registered for tokens issued for a person. */
+    public ConfidentialClient(
+            ClientId id,
+            RealmKey realm,
+            Set<GrantType> allowedGrants,
+            ClientAuthMethod authMethod,
+            Set<String> redirectUris,
+            Set<String> allowedScopes,
+            Set<String> audiences,
+            List<String> roles,
+            Set<String> postLogoutRedirectUris,
+            SignInTheme signInTheme,
+            Set<String> userScopes) {
+        this(id, realm, allowedGrants, authMethod, redirectUris, allowedScopes, audiences, roles,
+                postLogoutRedirectUris, signInTheme, userScopes, Set.of());
+    }
 
     /** A client with no scopes registered for tokens issued for a person: it may ask only for {@code openid}. */
     public ConfidentialClient(
@@ -133,6 +155,11 @@ public record ConfidentialClient(
         }
         userScopes.forEach(scope -> require(isScopeToken(scope), "userScopes", scope));
         audiences.forEach(audience -> require(isToken(audience), "audiences", audience));
+        if (userAudiences == null) {
+            throw new IllegalArgumentException("ConfidentialClient userAudiences must not be null");
+        }
+        userAudiences.forEach(audience ->
+                require(ResourceIndicators.isResourceIdentifier(audience), "userAudiences", audience));
         roles.forEach(role -> require(isToken(role), "roles", role));
         // Defensive copy + unmodifiable view: the record stays immutable even if the
         // caller mutates the set it passed in.
@@ -141,6 +168,7 @@ public record ConfidentialClient(
         allowedScopes = Collections.unmodifiableSet(new LinkedHashSet<>(allowedScopes));
         userScopes = Collections.unmodifiableSet(new LinkedHashSet<>(userScopes));
         audiences = Collections.unmodifiableSet(new LinkedHashSet<>(audiences));
+        userAudiences = Collections.unmodifiableSet(new LinkedHashSet<>(userAudiences));
         roles = List.copyOf(roles);
         postLogoutRedirectUris = Collections.unmodifiableSet(new LinkedHashSet<>(postLogoutRedirectUris));
     }

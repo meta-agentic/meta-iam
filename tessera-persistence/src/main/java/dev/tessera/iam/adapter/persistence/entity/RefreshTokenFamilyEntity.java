@@ -88,4 +88,8 @@ public class RefreshTokenFamilyEntity extends PanacheEntityBase {
     /** The space-separated scopes of the grant the family was issued under; null if not recorded. */
     @Column(name = "granted_scope", updatable = false)
     public String grantedScope;
+
+    /** The space-separated resources of the grant the family was issued under; null if not recorded. */
+    @Column(name = "granted_resources", updatable = false)
+    public String grantedResources;
 }

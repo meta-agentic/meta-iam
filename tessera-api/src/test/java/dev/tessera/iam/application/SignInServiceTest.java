@@ -65,7 +65,8 @@ class SignInServiceTest {
     /** Recorded consents, subject to scopes; the default test subject has consented to openid. */
     private final Map<String, Set<String>> consents = new HashMap<>();
     private Client client = new PublicClient(
-            ClientId.generate(), REALM, Set.<GrantType>of(new AuthorizationCode()), Set.of(REGISTERED));
+            ClientId.generate(), REALM, Set.<GrantType>of(new AuthorizationCode()), Set.of(REGISTERED), Set.of(),
+            null, Set.of(), Set.of("https://api.example/"));
     private int secrets;
 
     private final PendingAuthorizationStorePort store = new PendingAuthorizationStorePort() {
@@ -285,7 +286,7 @@ class SignInServiceTest {
     void clientChangedMeanwhile() {
         BeginResult.Started started = begin();
         client = new PublicClient(ClientId.generate(), REALM, Set.<GrantType>of(new AuthorizationCode()),
-                Set.of("https://c.example/other"));
+                Set.of("https://c.example/other"), Set.of(), null, Set.of(), Set.of("https://api.example/"));
 
         assertThat(submit(started.transactionId(), started.binding(), csrf(started), USERNAME, PASSWORD))
                 .isInstanceOf(SubmitResult.Refused.class);

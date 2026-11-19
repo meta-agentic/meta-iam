@@ -136,7 +136,7 @@ public class TokenResource {
             String certThumbprint = clientCertificates.thumbprint(clientCertificate);
             TokenRequestCommand command = new TokenRequestCommand(
                     realm, code, redirectUri, resolvedClientId, resolvedSecret, codeVerifier,
-                    dpopProof, certThumbprint, presentation);
+                    dpopProof, certThumbprint, presentation, nonBlank(resources));
             return token.redeemAuthorizationCode(command).map(result -> render(result, challenge));
         }
 
@@ -146,7 +146,7 @@ public class TokenResource {
                         "refresh_token and client_id are required");
             }
             RefreshCommand command = new RefreshCommand(
-                    realm, refreshToken, resolvedClientId, resolvedSecret, presentation, scope);
+                    realm, refreshToken, resolvedClientId, resolvedSecret, presentation, scope, nonBlank(resources));
             return refresh.redeem(command).map(result -> render(result, challenge));
         }
 
@@ -224,5 +224,10 @@ public class TokenResource {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    /** RFC 8707 {@code resource} values with empty ones dropped (RFC 6749 §3.1: treated as omitted). */
+    private static List<String> nonBlank(List<String> values) {
+        return values == null ? List.of() : values.stream().filter(v -> !isBlank(v)).toList();
     }
 }

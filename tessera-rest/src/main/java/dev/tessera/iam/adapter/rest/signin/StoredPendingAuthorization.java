@@ -19,7 +19,8 @@ import java.util.UUID;
  * The wire form of a {@link PendingAuthorization} on the shared cache: a flat JSON projection,
  * for the reasons {@code StoredGrant} gives for authorization codes. An entry lives for minutes,
  * so it never has to survive a schema change across a rolling upgrade; one that does not decode
- * is a miss and the user starts the sign-in again.
+ * is a miss and the user starts the sign-in again. {@code resources} carries the request's RFC 8707
+ * values; an entry without it, written before they were recorded, is such a miss.
  */
 record StoredPendingAuthorization(
         String transactionId,
@@ -38,7 +39,8 @@ record StoredPendingAuthorization(
         int createdAtNano,
         long expiresAtEpochSecond,
         int expiresAtNano,
-        String subjectId) {
+        String subjectId,
+        List<String> resources) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -61,7 +63,8 @@ record StoredPendingAuthorization(
                 pending.createdAt().getNano(),
                 pending.expiresAt().getEpochSecond(),
                 pending.expiresAt().getNano(),
-                pending.subjectId());
+                pending.subjectId(),
+                List.copyOf(request.resources()));
         try {
             return MAPPER.writeValueAsString(stored);
         } catch (JsonProcessingException e) {
@@ -87,7 +90,10 @@ record StoredPendingAuthorization(
                     new LinkedHashSet<>(stored.scopes),
                     stored.state,
                     stored.nonce,
-                    new CodeChallenge(PkceMethod.valueOf(stored.codeChallengeMethod), stored.codeChallengeValue));
+                    new CodeChallenge(PkceMethod.valueOf(stored.codeChallengeMethod), stored.codeChallengeValue),
+                    // An entry written before resources were recorded has none: it does not decode
+                    // (a NullPointerException here), so the user signs in again (ADR-IAM-009 D4).
+                    new LinkedHashSet<>(stored.resources));
             return new PendingAuthorization(
                     stored.transactionId,
                     request,

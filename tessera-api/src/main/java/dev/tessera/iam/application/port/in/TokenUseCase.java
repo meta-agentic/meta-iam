@@ -2,6 +2,7 @@ package dev.tessera.iam.application.port.in;
 
 import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import io.smallrye.mutiny.Uni;
+import java.util.List;
 import dev.tessera.iam.domain.authcode.AuthorizationError;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 
@@ -46,6 +47,7 @@ public interface TokenUseCase {
      *                     at the edge, or {@code null} when none was presented. Required for a
      *                     confidential client (its mTLS sender-constraining binding, RFC 8705).
      * @param secretPresentation how the request carried {@code clientSecret}.
+     * @param resources    the RFC 8707 {@code resource} values on the request (never {@code null})
      */
     record TokenRequestCommand(
             RealmKey realm,
@@ -56,7 +58,16 @@ public interface TokenUseCase {
             String codeVerifier,
             String dpopProof,
             String certThumbprint,
-            ClientSecretPresentation secretPresentation) {
+            ClientSecretPresentation secretPresentation,
+            List<String> resources) {
+
+        /** A request that names no {@code resource} (RFC 8707). */
+        public TokenRequestCommand(RealmKey realm, String code, String redirectUri, String clientId,
+                String clientSecret, String codeVerifier, String dpopProof, String certThumbprint,
+                ClientSecretPresentation secretPresentation) {
+            this(realm, code, redirectUri, clientId, clientSecret, codeVerifier, dpopProof, certThumbprint,
+                    secretPresentation, List.of());
+        }
 
         /** A request whose secret, if any, came in the body. */
         public TokenRequestCommand(RealmKey realm, String code, String redirectUri, String clientId,
@@ -81,6 +92,7 @@ public interface TokenUseCase {
             if (codeVerifier == null || codeVerifier.isBlank()) {
                 throw new IllegalArgumentException("TokenRequestCommand codeVerifier must not be blank");
             }
+            resources = resources == null ? List.of() : List.copyOf(resources);
         }
     }
 

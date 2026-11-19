@@ -35,6 +35,9 @@ import java.util.Set;
  *                      value is normalised to {@code null} by the adapter; a present value
  *                      must be non-blank.
  * @param codeChallenge the PKCE challenge — mandatory by construction (never {@code null})
+ * @param resources     the RFC 8707 {@code resource} values, verbatim and in request order
+ *                      (never {@code null}, may be empty). Whether each is registered for the
+ *                      client is decided by {@link dev.tessera.iam.domain.client.ResourceIndicators}.
  */
 public record AuthorizationRequest(
         RealmKey realm,
@@ -43,7 +46,20 @@ public record AuthorizationRequest(
         Set<String> scopes,
         String state,
         String nonce,
-        CodeChallenge codeChallenge) {
+        CodeChallenge codeChallenge,
+        Set<String> resources) {
+
+    /** A request that names no resource. */
+    public AuthorizationRequest(
+            RealmKey realm,
+            String clientId,
+            String redirectUri,
+            Set<String> scopes,
+            String state,
+            String nonce,
+            CodeChallenge codeChallenge) {
+        this(realm, clientId, redirectUri, scopes, state, nonce, codeChallenge, Set.of());
+    }
 
     public AuthorizationRequest {
         if (realm == null) {
@@ -72,7 +88,11 @@ public record AuthorizationRequest(
             // PKCE is mandatory; a request with no challenge cannot exist.
             throw new IllegalArgumentException("AuthorizationRequest requires a PKCE code challenge");
         }
+        if (resources == null) {
+            throw new IllegalArgumentException("AuthorizationRequest resources must not be null");
+        }
         scopes = Collections.unmodifiableSet(new LinkedHashSet<>(scopes));
+        resources = Collections.unmodifiableSet(new LinkedHashSet<>(resources));
     }
 
     /** @return {@code true} if {@code openid} was requested (an OIDC request). */

@@ -67,7 +67,7 @@ class RefreshBindingDowngradeProbeTest {
                         FakeClientRepository.CONFIDENTIAL_IDENTITY, realm,
                         Set.of(new AuthorizationCode(), new RefreshToken()),
                         ClientAuthMethod.CLIENT_SECRET_POST, Set.of(REDIRECT_URI), Set.of(), Set.of(), List.of(),
-                        Set.of(), null, FakeClientRepository.USER_SCOPES));
+                        Set.of(), null, FakeClientRepository.USER_SCOPES, FakeClientRepository.USER_AUDIENCES));
             }
             return super.findByClientId(realm, clientId);
         }
@@ -143,13 +143,17 @@ class RefreshBindingDowngradeProbeTest {
         assertDowngraded(otherKey);
     }
 
-    /** What a refresh mints today: Bearer, no {@code cnf}, no scope, no realm claims, {@code aud} the issuer. */
+    /**
+     * What a refresh mints today: Bearer, no {@code cnf}, no scope, no realm claims. Its {@code aud} is
+     * already the granted resource (ADR-IAM-009 D3, rule A2), never the issuer; the binding is what D2
+     * still has to restore.
+     */
     private static void assertDowngraded(Response refreshed) {
         assertThat(refreshed.jsonPath().getString("token_type")).isEqualTo("Bearer");
         Map<String, Object> claims = accessTokenClaims(refreshed);
         assertThat(claims).doesNotContainKey("cnf").doesNotContainKey("realm_tenant");
         assertThat(claims.get("scope")).isEqualTo("");
-        assertThat(claims.get("aud")).isEqualTo(ISSUER);
+        assertThat(claims.get("aud")).isEqualTo(FakeClientRepository.USER_API);
     }
 
     @SuppressWarnings("unchecked")

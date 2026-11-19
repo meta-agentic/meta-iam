@@ -109,7 +109,7 @@ class AuthorizationServiceTest {
     private static Client publicClient(Set<String> redirectUris) {
         return new PublicClient(
                 ClientId.generate(), REALM, Set.<GrantType>of(new AuthorizationCode()), redirectUris, Set.of(), null,
-                Set.of("profile"));
+                Set.of("profile"), Set.of("https://api.example/"));
     }
 
     private static AuthorizationRequest request(String redirectUri) {

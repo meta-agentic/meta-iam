@@ -32,6 +32,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,6 +47,9 @@ import org.junit.jupiter.api.Test;
  */
 @DisplayName("RefreshService — client auth + fail-closed issuance")
 class RefreshServiceTest {
+
+    /** The resource the client is registered for and its families were granted (ADR-IAM-009 D3). */
+    private static final String API = "https://api.example";
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
     private static final RealmKey REALM_A =
@@ -64,7 +68,8 @@ class RefreshServiceTest {
     private final ClientRepositoryPort clients = (realm, clientId) -> Uni.createFrom().item(
             CONF_WIRE.equals(clientId)
                     ? new ConfidentialClient(CONF_ID, realm, CODE_AND_REFRESH,
-                            registeredMethod, Set.of("https://c/cb"))
+                            registeredMethod, Set.of("https://c/cb"), Set.of(), Set.of(), List.of(), Set.of(), null,
+                            Set.of(), Set.of(API))
                     : (Client) null);
 
     private final ClientSecretVerifierPort verifier =
@@ -97,7 +102,8 @@ class RefreshServiceTest {
         String secret = "seed-secret-" + UUID.randomUUID();
         RefreshTokenFamily fam = new RefreshTokenFamily(
                 fid, REALM_A, UUID.randomUUID().toString(), CONF_ID,
-                RefreshTokenCodec.sha256(secret), null, 0, false, T0, T0.plusSeconds(3600));
+                RefreshTokenCodec.sha256(secret), null, 0, false, T0, T0.plusSeconds(3600), null, null,
+                Set.of(), Set.of(API));
         store.createFamily(fam).await().indefinitely();
         return RefreshTokenCodec.assemble(fid, secret);
     }

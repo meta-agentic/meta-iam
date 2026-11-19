@@ -5,6 +5,7 @@ import dev.tessera.iam.application.port.in.AuthorizeUseCase.AuthorizeResult;
 import dev.tessera.iam.domain.authcode.AuthorizationError;
 import dev.tessera.iam.domain.authcode.AuthorizationRequest;
 import dev.tessera.iam.domain.client.Client;
+import dev.tessera.iam.domain.client.ResourceIndicators;
 import dev.tessera.iam.domain.client.grant.AuthorizationCode;
 import dev.tessera.iam.domain.client.grant.GrantType;
 
@@ -51,6 +52,12 @@ final class ClientRequestCheck {
                 return new AuthorizeResult.Failed(AuthorizationError.INVALID_SCOPE,
                         "a requested scope is not registered for this client", true);
             }
+        }
+        // ADR-IAM-009 D3: every named resource must be registered for tokens issued for a person,
+        // and a client with none registered obtains no such token (RFC 8707 §2, invalid_target).
+        if (ResourceIndicators.grantSet(request.resources(), client.userAudiences())
+                instanceof ResourceIndicators.Outcome.Refused refused) {
+            return new AuthorizeResult.Failed(AuthorizationError.INVALID_TARGET, refused.description(), true);
         }
         return null;
     }

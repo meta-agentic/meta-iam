@@ -32,7 +32,8 @@ import java.util.UUID;
  * <p>{@code nonce} is nullable: OIDC Core §3.1.2.1 makes it OPTIONAL for the code flow, so
  * an absent nonce round-trips as JSON {@code null} and rebuilds as a {@code null} field on
  * the grant. That is the one field whose absence is <em>not</em> treated as a malformed
- * entry by {@link #decode(String)}.
+ * entry by {@link #decode(String)}. {@code resources}, the grant's RFC 8707 set, is required: a
+ * code stored before it was recorded is a miss.
  *
  * <p>{@link Instant}s are carried as (epoch-second, nano) pairs rather than millis so the
  * round-trip is lossless: a truncated {@code expiresAt} would move a code's expiry, and
@@ -51,7 +52,8 @@ record StoredGrant(
         long issuedAtEpochSecond,
         int issuedAtNano,
         long expiresAtEpochSecond,
-        int expiresAtNano) {
+        int expiresAtNano,
+        List<String> resources) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -69,7 +71,8 @@ record StoredGrant(
                 grant.issuedAt().getEpochSecond(),
                 grant.issuedAt().getNano(),
                 grant.expiresAt().getEpochSecond(),
-                grant.expiresAt().getNano());
+                grant.expiresAt().getNano(),
+                List.copyOf(grant.resources()));
         try {
             return MAPPER.writeValueAsString(stored);
         } catch (JsonProcessingException e) {
@@ -109,7 +112,10 @@ record StoredGrant(
                     new CodeChallenge(
                             PkceMethod.valueOf(stored.codeChallengeMethod), stored.codeChallengeValue),
                     Instant.ofEpochSecond(stored.issuedAtEpochSecond, stored.issuedAtNano),
-                    Instant.ofEpochSecond(stored.expiresAtEpochSecond, stored.expiresAtNano));
+                    Instant.ofEpochSecond(stored.expiresAtEpochSecond, stored.expiresAtNano),
+                    // A code stored before its grant's resources were recorded has none and does
+                    // not decode (NullPointerException): it is refused (ADR-IAM-009 D4).
+                    new LinkedHashSet<>(stored.resources));
         } catch (IllegalArgumentException | NullPointerException e) {
             // A structurally valid JSON object that is not a valid grant (bad UUID, unknown
             // PKCE method, missing field, expiresAt not after issuedAt). Same answer: a miss.

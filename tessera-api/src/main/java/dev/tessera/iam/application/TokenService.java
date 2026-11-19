@@ -20,6 +20,7 @@ import dev.tessera.iam.domain.client.Client;
 import dev.tessera.iam.domain.client.ClientAuthMethod;
 import dev.tessera.iam.domain.client.ConfidentialClient;
 import dev.tessera.iam.domain.client.PublicClient;
+import dev.tessera.iam.domain.client.ResourceIndicators;
 import dev.tessera.iam.domain.client.grant.GrantType;
 import dev.tessera.iam.domain.client.grant.RefreshToken;
 import dev.tessera.iam.domain.refresh.FamilyId;
@@ -228,6 +229,17 @@ public final class TokenService implements TokenUseCase {
     private Uni<TokenResult> assembleTokens(
             TokenRequestCommand command, AuthorizationGrant grant, Client client,
             Binding.Bound bound, Instant now) {
+        // Rule A1 (ADR-IAM-009 D3): one audience from the grant's set and the client's current
+        // list, never the issuer; a choice the rule cannot make is invalid_target, and no token
+        // is minted.
+        Set<String> audience;
+        switch (ResourceIndicators.audience(grant.resources(), client.userAudiences(), command.resources(), issuer)) {
+            case ResourceIndicators.Outcome.Granted granted -> audience = granted.resources();
+            case ResourceIndicators.Outcome.Refused refused -> {
+                return Uni.createFrom().item(new TokenResult.Failed(AuthorizationError.INVALID_TARGET,
+                        refused.description()));
+            }
+        }
         Set<String> scopes = grant.scopes();
         String jti = identifiers.newTokenId();
         Instant accessExpiry = now.plus(accessTokenTtl);
@@ -235,10 +247,10 @@ public final class TokenService implements TokenUseCase {
                 // Unbound Bearer: only reachable when the deployment opted out of mandatory
                 // sender-constraining for a secret-authenticated confidential client.
                 ? IssuedTokenClaims.accessToken(
-                        issuer, grant.subjectId(), command.clientId(), Set.of(issuer), scopes,
+                        issuer, grant.subjectId(), command.clientId(), audience, scopes,
                         jti, now, accessExpiry)
                 : IssuedTokenClaims.accessToken(
-                        issuer, grant.subjectId(), command.clientId(), Set.of(issuer), scopes,
+                        issuer, grant.subjectId(), command.clientId(), audience, scopes,
                         jti, now, accessExpiry, bound.cnf());
 
         Uni<String> accessUni = signer.sign(command.realm(), "at+jwt", accessClaims);
@@ -366,7 +378,7 @@ public final class TokenService implements TokenUseCase {
         RefreshTokenFamily family = new RefreshTokenFamily(
                 familyId, command.realm(), grant.subjectId(), grant.clientId(),
                 RefreshTokenCodec.sha256(secret), null, 0, false, now, now.plus(refreshTokenTtl),
-                grant.scopes());
+                null, null, grant.scopes(), grant.resources());
         return refreshStore.createFamily(family).replaceWith(wire);
     }
 

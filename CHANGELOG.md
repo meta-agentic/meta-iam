@@ -57,6 +57,17 @@ Accumulating toward the first release, `26.1.0 "Andromeda"`.
   authenticates by assertion spends one `jti` per introspection call and should cache
   introspection results rather than introspect every request.
 
+### Changed
+- **Per-resource access-token audience (ADR-IAM-009 D3, RFC 8707).** An access token issued for a
+  person names one resource from the client's registered `user_audiences` in `aud`, never the
+  issuer. `resource` is accepted at `/authorize` (narrows the grant) and at `/token` and on refresh
+  (chooses one); an unregistered or ungranted resource, several candidates with none named, or an
+  empty list is `invalid_target`. **Breaking, and part of the cut-over:** every client on the code
+  flow needs `user_audiences` before this release is deployed; codes and sign-ins in flight are
+  refused, and refresh tokens issued earlier mint nothing for a person. Migration V19 adds
+  `oauth_client.user_audiences` (not null, empty), `oauth_client.resource_identifier` and
+  `refresh_token_family.granted_resources` (both nullable).
+
 ### Security
 - Fail-closed startup: a production deployment refuses the well-known development master key.
 - `/introspect` admits only an authenticated confidential client (RFC 7662 §4). A public client
