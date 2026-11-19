@@ -35,6 +35,7 @@ import java.util.Optional;
  *   <li><strong>JWT access token</strong> — verified via {@link AccessTokenIntrospectorPort} against
  *       the realm's published keys; active iff it verifies and has not expired.</li>
  * </ul>
+ * A token of a tenant the registry does not hold as active is inactive, whatever its state.
  * Every negative outcome (unknown, malformed, expired, superseded, foreign-tenant) collapses to
  * {@link IntrospectionResult.Inactive} — the non-oracle guarantee. Realm-binding is header-bound like
  * revocation, never resolved from server state: introspection must not leak across tenants.
@@ -93,7 +94,15 @@ public final class IntrospectService implements IntrospectUseCase {
                                 command.clientSecret(), command.secretPresentation(), command.clientAssertion(), false)
                         .flatMap(authenticated -> profiles.andConforms(
                                 authenticated, command.realm(), client, ClientUse.ACTS_FOR_ITSELF))
-                        .flatMap(ok -> ok ? classify(command) : authFailed()));
+                        .flatMap(ok -> ok ? servedOrInactive(command) : authFailed()));
+    }
+
+    // A suspended tenant's tokens are reported inactive, after its caller authenticated
+    // (ADR-IAM-003 D1 consequence 2; ADR-IAM-011 D5's suspended row), so suspension bites at once
+    // for every resource server that introspects, not only once the token expires.
+    private Uni<IntrospectionResult> servedOrInactive(IntrospectCommand command) {
+        return profiles.isServed(command.realm())
+                .flatMap(served -> served ? classify(command) : Uni.createFrom().item(inactive()));
     }
 
     private Uni<IntrospectionResult> classify(IntrospectCommand command) {

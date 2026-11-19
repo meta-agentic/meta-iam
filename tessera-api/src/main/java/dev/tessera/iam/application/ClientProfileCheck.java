@@ -58,4 +58,33 @@ public final class ClientProfileCheck {
             return Boolean.TRUE;
         });
     }
+
+    /**
+     * Whether the realm's tenant is registered and active, for an endpoint that answers a suspended
+     * tenant without refusing the caller's authentication: {@code /introspect} reports its tokens
+     * inactive (ADR-IAM-003 D1 consequence 2). The reason is logged when it is not.
+     *
+     * @param realm the realm a token is evaluated in (never {@code null})
+     * @return {@code false} for an unregistered or a suspended tenant. An unreadable registry fails
+     *         the {@code Uni}.
+     */
+    public Uni<Boolean> isServed(RealmKey realm) {
+        if (realm == null) {
+            throw new IllegalArgumentException("realm must not be null");
+        }
+        return registry.find(realm.tenant()).map(found -> {
+            if (found.isEmpty()) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "tokens of tenant {0} reported inactive: it is not in the tenant registry",
+                        realm.tenant().value());
+                return Boolean.FALSE;
+            }
+            if (!found.get().isActive()) {
+                LOG.log(System.Logger.Level.WARNING, "tokens of tenant {0} reported inactive: it is {1}",
+                        realm.tenant().value(), found.get().status().wireName());
+                return Boolean.FALSE;
+            }
+            return Boolean.TRUE;
+        });
+    }
 }

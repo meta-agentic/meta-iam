@@ -7,6 +7,7 @@ import dev.tessera.iam.adapter.rest.ratelimit.RateLimited;
 import dev.tessera.iam.adapter.rest.signin.SignInCookies;
 import dev.tessera.iam.adapter.rest.tenancy.SubjectHeaders;
 import dev.tessera.iam.adapter.rest.tenancy.TenantContext;
+import dev.tessera.iam.adapter.rest.tenancy.RefusesSuspendedTenant;
 import dev.tessera.iam.adapter.rest.tenancy.TenantScoped;
 import dev.tessera.iam.application.port.in.AuthorizeUseCase;
 import dev.tessera.iam.application.port.in.AuthorizeUseCase.AuthorizeResult;
@@ -70,6 +71,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/authorize")
 @Tag(name = "authorization", description = "OAuth 2.0 / OIDC authorization endpoint.")
 @TenantScoped
+@RefusesSuspendedTenant
 @RateLimited
 public class AuthorizeResource {
 
