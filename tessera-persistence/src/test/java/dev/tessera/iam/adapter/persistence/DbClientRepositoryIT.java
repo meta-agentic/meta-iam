@@ -121,6 +121,7 @@ class DbClientRepositoryIT {
         asserter.execute(() -> scoped(tenant, s -> {
             OAuthClientEntity entity = confidential(tenant, clientId, "web-app", hash);
             entity.userScopes = "profile offline_access";
+            entity.userAudiences = "https://a.api.example https://b.api.example";
             return s.persist(entity).call(s::flush);
         }));
 
@@ -132,6 +133,9 @@ class DbClientRepositoryIT {
                     // V15's column round-trips through Postgres.
                     org.assertj.core.api.Assertions.assertThat(client.userScopes())
                             .containsExactly("profile", "offline_access");
+                    // V19's column round-trips too.
+                    org.assertj.core.api.Assertions.assertThat(client.userAudiences())
+                            .containsExactly("https://a.api.example", "https://b.api.example");
                     org.assertj.core.api.Assertions.assertThat(client.id().value()).isEqualTo(clientId);
                     org.assertj.core.api.Assertions.assertThat(client.redirectUris())
                             .containsExactly("https://client.example/callback");

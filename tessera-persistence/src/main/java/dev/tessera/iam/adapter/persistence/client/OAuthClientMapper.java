@@ -43,11 +43,14 @@ final class OAuthClientMapper {
         ClientId id = new ClientId(entity.id);
         SignInTheme theme = entity.signInTheme == null ? null : new SignInTheme(entity.signInTheme);
         Set<String> userScopes = parseWhitespaceList(entity.userScopes);
+        Set<String> userAudiences = parseWhitespaceList(entity.userAudiences);
         return switch (entity.clientType) {
             case CONFIDENTIAL -> new ConfidentialClient(id, realm, grants, authMethod(entity), redirectUris,
                     parseWhitespaceList(entity.allowedScopes), parseWhitespaceList(entity.audiences),
-                    List.copyOf(parseWhitespaceList(entity.roles)), postLogoutRedirectUris, theme, userScopes);
-            case PUBLIC -> new PublicClient(id, realm, grants, redirectUris, postLogoutRedirectUris, theme, userScopes);
+                    List.copyOf(parseWhitespaceList(entity.roles)), postLogoutRedirectUris, theme, userScopes,
+                    userAudiences);
+            case PUBLIC -> new PublicClient(id, realm, grants, redirectUris, postLogoutRedirectUris, theme, userScopes,
+                    userAudiences);
         };
     }
 

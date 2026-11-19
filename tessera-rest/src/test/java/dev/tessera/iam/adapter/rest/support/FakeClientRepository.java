@@ -99,6 +99,19 @@ public class FakeClientRepository implements ClientRepositoryPort {
             Set.of(new AuthorizationCode(), new RefreshToken());
     private static final Set<GrantType> ONLY_CLIENT_CREDENTIALS = Set.of(new ClientCredentials());
 
+    /** The one resource every code-grant client may obtain tokens for (ADR-IAM-009 D3). */
+    public static final String USER_API = "https://api.client.example";
+    public static final Set<String> USER_AUDIENCES = Set.of(USER_API);
+
+    /** A public client with the code and refresh grants registered for two resources. */
+    public static final String TWO_RESOURCE_CLIENT_ID = "public-two-resources";
+    public static final ClientId TWO_RESOURCE_IDENTITY = ClientId.generate();
+    public static final String API_A = "https://a.api.example";
+    public static final String API_B = "https://b.api.example";
+
+    /** A public code-grant client registered for no resource: it obtains no token for a person. */
+    public static final String NO_AUDIENCE_CLIENT_ID = "public-no-audience";
+
     /** The redirect URI the flow tests use; registered for every fake client. */
     public static final String REDIRECT_URI = "https://client.example/callback";
     private static final Set<String> REDIRECTS = Set.of(REDIRECT_URI);
@@ -114,14 +127,21 @@ public class FakeClientRepository implements ClientRepositoryPort {
         }
         Client client = switch (clientId == null ? "" : clientId) {
             case PUBLIC_CLIENT_ID -> new PublicClient(
-                    PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, POST_LOGOUT_REDIRECTS, null, USER_SCOPES);
+                    PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, POST_LOGOUT_REDIRECTS, null, USER_SCOPES,
+                    USER_AUDIENCES);
             case CONFIDENTIAL_CLIENT_ID -> new ConfidentialClient(
                     CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS,
-                    Set.of(), Set.of(), List.of(), Set.of(), null, USER_SCOPES);
+                    Set.of(), Set.of(), List.of(), Set.of(), null, USER_SCOPES, USER_AUDIENCES);
             case NO_CODE_CLIENT_ID -> new ConfidentialClient(
                     NO_CODE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
             case REFRESH_CLIENT_ID -> new PublicClient(
-                    REFRESH_IDENTITY, realm, CODE_AND_REFRESH, REDIRECTS, POST_LOGOUT_REDIRECTS, null, USER_SCOPES);
+                    REFRESH_IDENTITY, realm, CODE_AND_REFRESH, REDIRECTS, POST_LOGOUT_REDIRECTS, null, USER_SCOPES,
+                    USER_AUDIENCES);
+            case NO_AUDIENCE_CLIENT_ID -> new PublicClient(
+                    ClientId.generate(), realm, CODE_GRANT, REDIRECTS, Set.of(), null, USER_SCOPES, Set.of());
+            case TWO_RESOURCE_CLIENT_ID -> new PublicClient(
+                    TWO_RESOURCE_IDENTITY, realm, CODE_AND_REFRESH, REDIRECTS, POST_LOGOUT_REDIRECTS, null,
+                    USER_SCOPES, Set.of(API_A, API_B));
             case MACHINE_CLIENT_ID -> MACHINE_TENANT.equals(realm.tenant().value().toString())
                     ? new ConfidentialClient(MACHINE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS,
                             ClientAuthMethod.CLIENT_SECRET_BASIC, Set.of(), MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES)
@@ -145,11 +165,12 @@ public class FakeClientRepository implements ClientRepositoryPort {
     private static Client byMethod(RealmKey realm, ClientAuthMethod method) {
         return new ConfidentialClient(CONFIDENTIAL_IDENTITY, realm,
                 Set.of(new AuthorizationCode(), new ClientCredentials(), new RefreshToken()), method, REDIRECTS,
-                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES, Set.of(), null, USER_SCOPES);
+                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES, Set.of(), null, USER_SCOPES, USER_AUDIENCES);
     }
 
     private static Client themed(RealmKey realm, String theme) {
-        return new PublicClient(PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, Set.of(), new SignInTheme(theme), USER_SCOPES);
+        return new PublicClient(PUBLIC_IDENTITY, realm, CODE_GRANT, REDIRECTS, Set.of(), new SignInTheme(theme), USER_SCOPES,
+                USER_AUDIENCES);
     }
 
     /** A {@link FakeWorkloads} client, registered only in {@link #MACHINE_TENANT}. */

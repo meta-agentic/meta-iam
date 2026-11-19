@@ -69,7 +69,8 @@ class RefreshTokenStoreIT {
 
         asserter.execute(() -> store.createFamily(new RefreshTokenFamily(
                 fid, realm(tenant), UUID.randomUUID().toString(), ClientId.generate(),
-                "h0", null, 0, false, T0, T0.plusSeconds(3600), Set.of("openid", "offline_access"))));
+                "h0", null, 0, false, T0, T0.plusSeconds(3600), null, null, Set.of("openid", "offline_access"),
+                Set.of("https://a.api.example", "https://b.api.example"))));
         asserter.assertThat(
                 () -> store.consumeAndRotate(fid, realm(tenant), "h0", "h1", NOW, grace, "salt-1"),
                 o -> {
@@ -77,6 +78,9 @@ class RefreshTokenStoreIT {
                     assertThat(o.family().rotatedAt()).isEqualTo(NOW);
                     assertThat(o.family().rotationSalt()).isEqualTo("salt-1");
                     assertThat(o.family().grantedScopes()).containsExactlyInAnyOrder("openid", "offline_access");
+                    // V19's granted_resources round-trips, and survives the rotation (rule A2).
+                    assertThat(o.family().grantedResources())
+                            .containsExactlyInAnyOrder("https://a.api.example", "https://b.api.example");
                 });
 
         // The same superseded token two seconds later: reissue, and the family stays as it was.

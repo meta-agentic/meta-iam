@@ -45,6 +45,9 @@ import java.util.Set;
  * @param grantedScopes     the scopes of the grant the family was issued under (empty if unknown,
  *                          for families created before they were recorded); a refresh re-issues an
  *                          ID token only when they include {@code openid}
+ * @param grantedResources  the whole resource set of the grant the family was issued under
+ *                          (ADR-IAM-009 D3 rule A2, RFC 8707 §2.2); empty for a family created
+ *                          before it was recorded, which mints no token for a person
  */
 public record RefreshTokenFamily(
         FamilyId id,
@@ -59,7 +62,27 @@ public record RefreshTokenFamily(
         Instant expiresAt,
         Instant rotatedAt,
         String rotationSalt,
-        Set<String> grantedScopes) {
+        Set<String> grantedScopes,
+        Set<String> grantedResources) {
+
+    /** A family whose granted resources are not recorded. */
+    public RefreshTokenFamily(
+            FamilyId id,
+            RealmKey realm,
+            String userId,
+            ClientId clientId,
+            String currentTokenHash,
+            String previousTokenHash,
+            int generation,
+            boolean reused,
+            Instant createdAt,
+            Instant expiresAt,
+            Instant rotatedAt,
+            String rotationSalt,
+            Set<String> grantedScopes) {
+        this(id, realm, userId, clientId, currentTokenHash, previousTokenHash, generation, reused,
+                createdAt, expiresAt, rotatedAt, rotationSalt, grantedScopes, Set.of());
+    }
 
     /** A family that has never rotated, issued under {@code grantedScopes}. */
     public RefreshTokenFamily(
@@ -96,6 +119,7 @@ public record RefreshTokenFamily(
 
     public RefreshTokenFamily {
         grantedScopes = grantedScopes == null ? Set.of() : Set.copyOf(grantedScopes);
+        grantedResources = grantedResources == null ? Set.of() : Set.copyOf(grantedResources);
         if (id == null) {
             throw new IllegalArgumentException("RefreshTokenFamily id must not be null");
         }
@@ -125,13 +149,13 @@ public record RefreshTokenFamily(
     /** The same family after a rotation at {@code now} to {@code newTokenHash}, with its salt. */
     public RefreshTokenFamily rotatedTo(String newTokenHash, Instant now, String salt) {
         return new RefreshTokenFamily(id, realm, userId, clientId, newTokenHash, currentTokenHash,
-                generation + 1, false, createdAt, expiresAt, now, salt, grantedScopes);
+                generation + 1, false, createdAt, expiresAt, now, salt, grantedScopes, grantedResources);
     }
 
     /** The same family, revoked. */
     public RefreshTokenFamily burned() {
         return new RefreshTokenFamily(id, realm, userId, clientId, currentTokenHash, previousTokenHash,
-                generation, true, createdAt, expiresAt, rotatedAt, rotationSalt, grantedScopes);
+                generation, true, createdAt, expiresAt, rotatedAt, rotationSalt, grantedScopes, grantedResources);
     }
 
     /**

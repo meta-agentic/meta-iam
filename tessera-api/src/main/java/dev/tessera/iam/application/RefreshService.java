@@ -1,5 +1,6 @@
 package dev.tessera.iam.application;
 
+import dev.tessera.iam.domain.client.ResourceIndicators;
 import dev.tessera.iam.domain.client.ClientUse;
 import dev.tessera.iam.application.port.in.RefreshUseCase;
 import dev.tessera.iam.application.port.in.TokenUseCase.TokenResult;
@@ -205,28 +206,55 @@ public final class RefreshService implements RefreshUseCase {
                     if (!ok) {
                         return invalidClient("client authentication failed");
                     }
-                    // (4) Mint the replacement and rotate atomically against the authoritative realm.
-                    Instant now = clock.instant();
-                    String presentedHash = RefreshTokenCodec.sha256(presentedSecret);
-                    // The grace, and the derived successor it needs, only ever for a confidential
-                    // client: a public client's refresh token is its only proof, so its replay
-                    // detection stays strict.
-                    Duration grace = graceOn() && client instanceof ConfidentialClient
-                            ? reuseGrace : Duration.ZERO;
-                    String salt = grace.isZero() ? null : identifiers.newRefreshToken();
-                    String newSecret = salt == null
-                            ? identifiers.newRefreshToken()
-                            : RefreshTokenCodec.successorSecret(successorKey, fid, presentedSecret, salt);
-                    String newHash = RefreshTokenCodec.sha256(newSecret);
-                    return refreshStore
-                            .consumeAndRotate(fid, authoritativeRealm, presentedHash, newHash, now,
-                                    grace, salt)
-                            .flatMap(outcome -> onOutcome(
-                                    command, client, authoritativeRealm, fid, newSecret, presentedSecret,
-                                    outcome, now));
+                    // (4) Rule A2 (ADR-IAM-009 D3), before anything rotates: the family's granted
+                    // resources, intersected with the client's current list, must yield one audience.
+                    // The granted set never changes after the family is created, so reading it ahead
+                    // of the rotation is safe; a refusal leaves the live token unspent. Only the live
+                    // token is refused here: a superseded one goes on to the rotation, whose replay
+                    // detection must still see it and revoke the family.
+                    return refreshStore.find(fid, authoritativeRealm).flatMap(existing -> {
+                        if (existing != null && existing.clientId().equals(client.id())
+                                && RefreshTokenCodec.matches(presentedSecret, existing.currentTokenHash())
+                                && audienceFor(existing, client, command)
+                                        instanceof ResourceIndicators.Outcome.Refused refused) {
+                            return Uni.createFrom().item((TokenResult) new TokenResult.Failed(
+                                    AuthorizationError.INVALID_TARGET, refused.description()));
+                        }
+                        return rotate(command, client, authoritativeRealm, fid, presentedSecret);
+                    });
                 });
             });
         });
+    }
+
+    private Uni<TokenResult> rotate(
+            RefreshCommand command, Client client, RealmKey authoritativeRealm, FamilyId fid,
+            String presentedSecret) {
+        // (5) Mint the replacement and rotate atomically against the authoritative realm.
+        Instant now = clock.instant();
+        String presentedHash = RefreshTokenCodec.sha256(presentedSecret);
+        // The grace, and the derived successor it needs, only ever for a confidential
+        // client: a public client's refresh token is its only proof, so its replay
+        // detection stays strict.
+        Duration grace = graceOn() && client instanceof ConfidentialClient
+                ? reuseGrace : Duration.ZERO;
+        String salt = grace.isZero() ? null : identifiers.newRefreshToken();
+        String newSecret = salt == null
+                ? identifiers.newRefreshToken()
+                : RefreshTokenCodec.successorSecret(successorKey, fid, presentedSecret, salt);
+        String newHash = RefreshTokenCodec.sha256(newSecret);
+        return refreshStore
+                .consumeAndRotate(fid, authoritativeRealm, presentedHash, newHash, now,
+                        grace, salt)
+                .flatMap(outcome -> onOutcome(
+                        command, client, authoritativeRealm, fid, newSecret, presentedSecret,
+                        outcome, now));
+    }
+
+    private ResourceIndicators.Outcome audienceFor(
+            RefreshTokenFamily family, Client client, RefreshCommand command) {
+        return ResourceIndicators.audience(
+                family.grantedResources(), client.userAudiences(), command.resources(), issuer);
     }
 
     private Uni<TokenResult> onOutcome(
@@ -239,7 +267,7 @@ public final class RefreshService implements RefreshUseCase {
                 if (family == null || !family.clientId().equals(client.id())) {
                     yield invalidGrant("refresh token is invalid");
                 }
-                yield issue(command, family, authoritativeRealm, fid, newSecret, now);
+                yield issue(command, client, family, authoritativeRealm, fid, newSecret, now);
             }
             // The predecessor of the live token, again, inside the reuse grace (a concurrent request
             // of the same session): answer with the successor its first presentation received. The
@@ -257,7 +285,7 @@ public final class RefreshService implements RefreshUseCase {
                 if (!RefreshTokenCodec.matches(successor, family.currentTokenHash())) {
                     yield invalidGrant("refresh token is invalid");
                 }
-                yield issue(command, family, authoritativeRealm, fid, successor, now);
+                yield issue(command, client, family, authoritativeRealm, fid, successor, now);
             }
             // Replay: the store already burned the family inside the CAS; revoke again (idempotent)
             // as a belt-and-braces fail-safe, then refuse.
@@ -279,14 +307,24 @@ public final class RefreshService implements RefreshUseCase {
     }
 
     private Uni<TokenResult> issue(
-            RefreshCommand command, RefreshTokenFamily family, RealmKey authoritativeRealm,
+            RefreshCommand command, Client client, RefreshTokenFamily family, RealmKey authoritativeRealm,
             FamilyId fid, String refreshSecret, Instant now) {
+        // The same rule A2 as before the rotation, on the same immutable granted set and the same
+        // client, so it settles on the same audience.
+        Set<String> audience;
+        switch (audienceFor(family, client, command)) {
+            case ResourceIndicators.Outcome.Granted granted -> audience = granted.resources();
+            case ResourceIndicators.Outcome.Refused refused -> {
+                return Uni.createFrom().item(new TokenResult.Failed(AuthorizationError.INVALID_TARGET,
+                        refused.description()));
+            }
+        }
         // The refreshed access token carries no scope: echoing the request scope would be an
         // unbounded escalation, and carrying the family's granted scope on it is a separate change.
         // An ID token is re-issued when the original grant included openid (OIDC Core §12.2), for
         // the same subject and client and without a nonce.
         ClaimSet accessClaims = IssuedTokenClaims.accessToken(
-                issuer, family.userId(), command.clientId(), Set.of(issuer), Set.of(),
+                issuer, family.userId(), command.clientId(), audience, Set.of(),
                 identifiers.newTokenId(), now, now.plus(accessTokenTtl));
         // NOTE (follow-up): the refreshed access token is not yet sender-constrained.
         // Binding it correctly requires continuity — the refresh proof must match the

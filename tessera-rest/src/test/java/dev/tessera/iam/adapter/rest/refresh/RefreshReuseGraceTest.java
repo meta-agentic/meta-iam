@@ -49,6 +49,9 @@ import org.junit.jupiter.api.Test;
 @DisplayName("RefreshService — reuse grace for concurrent presentations")
 class RefreshReuseGraceTest {
 
+    /** The resource the client is registered for and its families were granted (ADR-IAM-009 D3). */
+    private static final String API = "https://api.example";
+
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
     private static final Duration GRACE = Duration.ofSeconds(5);
     private static final byte[] KEY = "0123456789abcdef0123456789abcdef".getBytes();
@@ -70,9 +73,11 @@ class RefreshReuseGraceTest {
     private final ClientRepositoryPort clients = (realm, clientId) -> Uni.createFrom().item(
             CLIENT_WIRE.equals(clientId)
                     ? new ConfidentialClient(CLIENT_ID, realm, CODE_AND_REFRESH,
-                            ClientAuthMethod.CLIENT_SECRET_POST, Set.of("https://c/cb"))
+                            ClientAuthMethod.CLIENT_SECRET_POST, Set.of("https://c/cb"), Set.of(), Set.of(), List.of(),
+                            Set.of(), null, Set.of(), Set.of(API))
                     : PUBLIC_WIRE.equals(clientId)
-                            ? new PublicClient(PUBLIC_ID, realm, CODE_AND_REFRESH, Set.of("https://c/cb"))
+                            ? new PublicClient(PUBLIC_ID, realm, CODE_AND_REFRESH, Set.of("https://c/cb"), Set.of(),
+                                    null, Set.of(), Set.of(API))
                             : (Client) null);
     /** The claim sets signed as ID tokens ({@code typ JWT}), in order. */
     private final List<ClaimSet> idTokens = new ArrayList<>();
@@ -111,7 +116,8 @@ class RefreshReuseGraceTest {
         String secret = "seed-" + UUID.randomUUID();
         store.createFamily(new RefreshTokenFamily(
                 fid, REALM, USER, owner,
-                RefreshTokenCodec.sha256(secret), null, 0, false, T0, T0.plusSeconds(3600), scopes))
+                RefreshTokenCodec.sha256(secret), null, 0, false, T0, T0.plusSeconds(3600), null, null, scopes,
+                Set.of(API)))
                 .await().indefinitely();
         return RefreshTokenCodec.assemble(fid, secret);
     }

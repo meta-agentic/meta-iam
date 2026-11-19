@@ -52,7 +52,22 @@ public record AuthorizationGrant(
         String nonce,
         CodeChallenge codeChallenge,
         Instant issuedAt,
-        Instant expiresAt) {
+        Instant expiresAt,
+        Set<String> resources) {
+
+    /** A grant that holds no resource: no access token for a person can be minted from it. */
+    public AuthorizationGrant(
+            RealmKey realm,
+            ClientId clientId,
+            String subjectId,
+            String redirectUri,
+            Set<String> scopes,
+            String nonce,
+            CodeChallenge codeChallenge,
+            Instant issuedAt,
+            Instant expiresAt) {
+        this(realm, clientId, subjectId, redirectUri, scopes, nonce, codeChallenge, issuedAt, expiresAt, Set.of());
+    }
 
     public AuthorizationGrant {
         if (realm == null) {
@@ -88,7 +103,11 @@ public record AuthorizationGrant(
         if (!expiresAt.isAfter(issuedAt)) {
             throw new IllegalArgumentException("AuthorizationGrant expiresAt must be after issuedAt");
         }
+        if (resources == null) {
+            throw new IllegalArgumentException("AuthorizationGrant resources must not be null");
+        }
         scopes = Collections.unmodifiableSet(new LinkedHashSet<>(scopes));
+        resources = Collections.unmodifiableSet(new LinkedHashSet<>(resources));
     }
 
     /**

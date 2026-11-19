@@ -4,6 +4,7 @@ import dev.tessera.iam.application.port.in.TokenUseCase.TokenResult;
 import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import io.smallrye.mutiny.Uni;
+import java.util.List;
 
 /**
  * Inbound port for the refresh-token grant ({@code grant_type=refresh_token}, RFC 6749 §6) at
@@ -36,6 +37,7 @@ public interface RefreshUseCase {
      * @param clientId     the wire {@code client_id} (never {@code null} or blank)
      * @param clientSecret the presented secret for a confidential client, or {@code null} for a public one
      * @param scope        the requested scope, or {@code null} — currently ignored (see the service)
+     * @param resources    the RFC 8707 {@code resource} values on the request (never {@code null})
      */
     record RefreshCommand(
             RealmKey requestRealm,
@@ -43,7 +45,15 @@ public interface RefreshUseCase {
             String clientId,
             String clientSecret,
             ClientSecretPresentation secretPresentation,
-            String scope) {
+            String scope,
+            List<String> resources) {
+
+        /** A refresh that names no {@code resource} (RFC 8707). */
+        public RefreshCommand(
+                RealmKey requestRealm, String refreshToken, String clientId, String clientSecret,
+                ClientSecretPresentation secretPresentation, String scope) {
+            this(requestRealm, refreshToken, clientId, clientSecret, secretPresentation, scope, List.of());
+        }
 
         /** A request whose secret, if any, came in the body. */
         public RefreshCommand(
@@ -61,6 +71,7 @@ public interface RefreshUseCase {
             if (clientId == null || clientId.isBlank()) {
                 throw new IllegalArgumentException("RefreshCommand clientId must not be blank");
             }
+            resources = resources == null ? List.of() : List.copyOf(resources);
         }
     }
 }

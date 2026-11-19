@@ -76,4 +76,15 @@ public sealed interface Client permits ConfidentialClient, PublicClient {
      * @return an immutable view of the registered user scopes
      */
     Set<String> userScopes();
+
+    /**
+     * The resources ({@code aud}) a token issued for a person may name (ADR-IAM-009 D3,
+     * {@code oauth_client.user_audiences}). Each is an absolute URI with no fragment, compared by
+     * exact string. Separate from a confidential client's {@code client_credentials} audiences,
+     * and neither feeds the other. An empty list means the client obtains no token for a person.
+     * Returned as an unmodifiable set.
+     *
+     * @return an immutable view of the registered user audiences
+     */
+    Set<String> userAudiences();
 }
