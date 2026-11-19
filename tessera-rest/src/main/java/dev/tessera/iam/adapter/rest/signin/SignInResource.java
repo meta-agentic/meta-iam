@@ -7,6 +7,7 @@ import dev.tessera.iam.adapter.rest.login.LoginConfig;
 import dev.tessera.iam.adapter.rest.ratelimit.RateLimited;
 import dev.tessera.iam.adapter.rest.session.SessionCookies;
 import dev.tessera.iam.adapter.rest.tenancy.TenantContext;
+import dev.tessera.iam.adapter.rest.tenancy.RefusesSuspendedTenant;
 import dev.tessera.iam.adapter.rest.tenancy.TenantScoped;
 import dev.tessera.iam.application.port.in.SignInUseCase;
 import dev.tessera.iam.application.port.in.SignInUseCase.ConsentForm;
@@ -66,6 +67,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/signin")
 @Tag(name = "sign-in", description = "Hosted sign-in page for the authorization code flow.")
 @TenantScoped
+@RefusesSuspendedTenant
 @RateLimited
 public class SignInResource {
 

@@ -4,6 +4,7 @@ import dev.tessera.iam.adapter.rest.dto.OAuthErrorDto;
 import dev.tessera.iam.adapter.rest.problem.ProblemResponse;
 import dev.tessera.iam.adapter.rest.tenancy.SubjectHeaders;
 import dev.tessera.iam.adapter.rest.tenancy.TenantContext;
+import dev.tessera.iam.adapter.rest.tenancy.RefusesSuspendedTenant;
 import dev.tessera.iam.adapter.rest.tenancy.TenantScoped;
 import dev.tessera.iam.application.port.in.ConsentUseCase;
 import dev.tessera.iam.domain.client.ClientId;
@@ -42,6 +43,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/consent")
 @Tag(name = "consent", description = "Records end-user consent for a client's requested scopes.")
 @TenantScoped
+@RefusesSuspendedTenant
 public class ConsentResource {
 
     @Inject

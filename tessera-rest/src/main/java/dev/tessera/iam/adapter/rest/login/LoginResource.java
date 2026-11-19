@@ -4,6 +4,7 @@ import dev.tessera.iam.adapter.rest.dto.OAuthErrorDto;
 import dev.tessera.iam.adapter.rest.ratelimit.RateLimited;
 import dev.tessera.iam.adapter.rest.session.SessionCookies;
 import dev.tessera.iam.adapter.rest.tenancy.TenantContext;
+import dev.tessera.iam.adapter.rest.tenancy.RefusesSuspendedTenant;
 import dev.tessera.iam.adapter.rest.tenancy.TenantScoped;
 import dev.tessera.iam.application.port.in.LoginUseCase;
 import dev.tessera.iam.application.port.in.LoginUseCase.LoginResult;
@@ -39,6 +40,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/login")
 @Tag(name = "login", description = "End-user login: verifies a credential and establishes a session.")
 @TenantScoped
+@RefusesSuspendedTenant
 @RateLimited
 public class LoginResource {
 
