@@ -42,6 +42,8 @@ Read from the source on `main` on the survey date, so the ratings below start fr
 
 ## Drafts and emerging work
 
+> **Superseded for MCP (2026-11-19).** The two MCP rows of the table below, and the MCP follow-up further down, were mapped by reading. [MCP authorization against tessera, measured](mcp-authorization-conformance-2026-11.md) replaces them with conformance results and a requirement-by-requirement table. The rest of this note is unchanged.
+
 Working-group drafts first, then individual submissions. An individual draft has no IETF standing.
 
 | Item | Status (source, read 2026-10-28) | Verdict | What it means for tessera |
@@ -91,6 +93,8 @@ Working-group drafts first, then individual submissions. An individual draft has
 5. **A clean MCP authorization server.** RFC 8707 at `/authorize`, Client ID Metadata Documents with the SSRF controls, the RFC 9207 metadata flag, and the stable client-credentials extension.
 
 ## Planned follow-ups and the standards each builds on
+
+> The "MCP authorization support" row is superseded by [MCP authorization against tessera, measured](mcp-authorization-conformance-2026-11.md) (2026-11-19).
 
 | Follow-up | Build on | Do not build on |
 |---|---|---|
