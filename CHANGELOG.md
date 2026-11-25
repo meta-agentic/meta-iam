@@ -58,6 +58,12 @@ Accumulating toward the first release, `26.1.0 "Andromeda"`.
   introspection results rather than introspect every request.
 
 ### Changed
+- **Every access token carries its realm, and introspection compares it (ADR-IAM-003 D4b).** The
+  authorization-code and refresh paths now stamp `realm_tenant` and `realm_baseline`, as
+  `client_credentials` already did; the signer refuses an access token without them. `/introspect`
+  reports a token whose realm claims are missing or name another tenant or baseline as inactive.
+  Per ADR-IAM-009 D3 this ships with the cut-over, with no transition: an access token minted
+  before it, without the claims, introspects as inactive for the rest of its minutes.
 - **Per-resource access-token audience (ADR-IAM-009 D3, RFC 8707).** An access token issued for a
   person names one resource from the client's registered `user_audiences` in `aud`, never the
   issuer. `resource` is accepted at `/authorize` (narrows the grant) and at `/token` and on refresh

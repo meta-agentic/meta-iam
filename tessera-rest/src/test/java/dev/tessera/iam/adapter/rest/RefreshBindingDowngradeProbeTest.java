@@ -144,14 +144,14 @@ class RefreshBindingDowngradeProbeTest {
     }
 
     /**
-     * What a refresh mints today: Bearer, no {@code cnf}, no scope, no realm claims. Its {@code aud} is
-     * already the granted resource (ADR-IAM-009 D3, rule A2), never the issuer; the binding is what D2
-     * still has to restore.
+     * What a refresh mints today: Bearer, no {@code cnf}, no scope. Its {@code aud} is already the
+     * granted resource (ADR-IAM-009 D3, rule A2), never the issuer, and it carries its realm claims
+     * (ADR-IAM-003 D4b); the binding is what D2 still has to restore.
      */
     private static void assertDowngraded(Response refreshed) {
         assertThat(refreshed.jsonPath().getString("token_type")).isEqualTo("Bearer");
         Map<String, Object> claims = accessTokenClaims(refreshed);
-        assertThat(claims).doesNotContainKey("cnf").doesNotContainKey("realm_tenant");
+        assertThat(claims).doesNotContainKey("cnf").containsKeys("realm_tenant", "realm_baseline");
         assertThat(claims.get("scope")).isEqualTo("");
         assertThat(claims.get("aud")).isEqualTo(FakeClientRepository.USER_API);
     }

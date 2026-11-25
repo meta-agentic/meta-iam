@@ -40,6 +40,8 @@ public interface AccessTokenIntrospectorPort {
      * @param jti       the {@code jti} claim, or {@code null}
      * @param issuedAt  the {@code iat} claim (epoch seconds), or {@code null}
      * @param expiresAt the {@code exp} claim (epoch seconds), or {@code null}
+     * @param realmTenant   the {@code realm_tenant} claim, or {@code null} if absent
+     * @param realmBaseline the {@code realm_baseline} claim, or {@code null} if absent
      */
     record VerifiedAccessToken(
             String subject,
@@ -47,6 +49,24 @@ public interface AccessTokenIntrospectorPort {
             String scope,
             String jti,
             Long issuedAt,
-            Long expiresAt) {
+            Long expiresAt,
+            String realmTenant,
+            String realmBaseline) {
+
+        /** A token that carries no realm claims: introspection reports it inactive. */
+        public VerifiedAccessToken(
+                String subject, String clientId, String scope, String jti, Long issuedAt, Long expiresAt) {
+            this(subject, clientId, scope, jti, issuedAt, expiresAt, null, null);
+        }
+
+        /**
+         * @param realm the realm a token is introspected in (never {@code null})
+         * @return {@code true} iff both realm claims are present and name exactly that realm
+         *         (ADR-IAM-003 D4b: the full realm, tenant and baseline, fail closed)
+         */
+        public boolean mintedIn(RealmKey realm) {
+            return realm.tenant().value().toString().equals(realmTenant)
+                    && realm.baseline().value().toString().equals(realmBaseline);
+        }
     }
 }
