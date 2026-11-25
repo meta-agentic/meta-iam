@@ -253,7 +253,9 @@ public final class TokenService implements TokenUseCase {
                         issuer, grant.subjectId(), command.clientId(), audience, scopes,
                         jti, now, accessExpiry, bound.cnf());
 
-        Uni<String> accessUni = signer.sign(command.realm(), "at+jwt", accessClaims);
+        // The realm claims are stamped last, as on every access token (ADR-IAM-003 D4b).
+        Uni<String> accessUni = signer.sign(command.realm(), "at+jwt",
+                IssuedTokenClaims.withRealm(accessClaims, command.realm()));
 
         boolean openId = scopes.contains("openid");
         Uni<String> idUni = openId

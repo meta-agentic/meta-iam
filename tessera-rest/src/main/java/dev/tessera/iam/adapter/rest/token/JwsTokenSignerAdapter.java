@@ -39,6 +39,9 @@ public class JwsTokenSignerAdapter implements TokenSignerPort {
 
     private static final Base64.Encoder B64URL = Base64.getUrlEncoder().withoutPadding();
 
+    /** The {@code typ} of an RFC 9068 access token. */
+    static final String ACCESS_TOKEN_TYP = "at+jwt";
+
     @Inject
     KeyProviderPort keyProvider;
 
@@ -55,6 +58,13 @@ public class JwsTokenSignerAdapter implements TokenSignerPort {
         }
         if (claims == null) {
             throw new IllegalArgumentException("claims must not be null");
+        }
+        // Every access token names the realm it was minted in (ADR-IAM-003 D4b): a mint path that
+        // skipped IssuedTokenClaims.withRealm fails here, loudly, instead of issuing a token that
+        // introspection would then report inactive.
+        if (ACCESS_TOKEN_TYP.equals(typ) && !stampedWith(claims, realm)) {
+            throw new IllegalStateException(
+                    "an access token must carry realm_tenant and realm_baseline for the realm it is signed in");
         }
 
         // Resolve the realm's current ACTIVE key so its kid/alg stamp the header, then sign
@@ -101,5 +111,10 @@ public class JwsTokenSignerAdapter implements TokenSignerPort {
             // lists assembled by the domain; serialisation cannot legitimately fail.
             throw new IllegalStateException("Failed to serialise JWT JSON", e);
         }
+    }
+
+    static boolean stampedWith(ClaimSet claims, RealmKey realm) {
+        return realm.tenant().value().toString().equals(claims.claims().get("realm_tenant"))
+                && realm.baseline().value().toString().equals(claims.claims().get("realm_baseline"));
     }
 }

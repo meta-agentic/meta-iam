@@ -33,7 +33,9 @@ import java.util.Optional;
  *       family is visible in the caller's realm, not revoked, not expired, and the presented secret
  *       is the family's <em>current</em> (live) token hash. A superseded token is inactive.</li>
  *   <li><strong>JWT access token</strong> — verified via {@link AccessTokenIntrospectorPort} against
- *       the realm's published keys; active iff it verifies and has not expired.</li>
+ *       the realm's published keys; active iff it verifies, names this realm in its
+ *       {@code realm_tenant} and {@code realm_baseline} claims (ADR-IAM-003 D4b), and has not
+ *       expired.</li>
  * </ul>
  * A token of a tenant the registry does not hold as active is inactive, whatever its state.
  * Every negative outcome (unknown, malformed, expired, superseded, foreign-tenant) collapses to
@@ -114,7 +116,7 @@ public final class IntrospectService implements IntrospectUseCase {
             return introspectRefresh(command.realm(), refresh.get(), now);
         }
         return accessTokens.verify(command.realm(), command.token())
-                .map(verified -> introspectAccess(verified, now));
+                .map(verified -> introspectAccess(command.realm(), verified, now));
     }
 
     private Uni<IntrospectionResult> introspectRefresh(
@@ -136,11 +138,17 @@ public final class IntrospectService implements IntrospectUseCase {
         });
     }
 
-    static IntrospectionResult introspectAccess(Optional<VerifiedAccessToken> verified, Instant now) {
+    static IntrospectionResult introspectAccess(RealmKey realm, Optional<VerifiedAccessToken> verified, Instant now) {
         if (verified.isEmpty()) {
             return inactive();
         }
         VerifiedAccessToken v = verified.get();
+        // ADR-IAM-003 D4b: the token must name, in its own claims, the realm it is introspected in.
+        // This is the second boundary beside the per-tenant keys: a token with no realm claims, or
+        // another tenant's or another baseline's, is inactive whatever key verified it.
+        if (!v.mintedIn(realm)) {
+            return inactive();
+        }
         // Verified signature under the realm's keys; the active decision is expiry, evaluated here.
         // A token without exp has no lifetime to bound it, so it is never active.
         if (v.expiresAt() == null || now.getEpochSecond() >= v.expiresAt()) {

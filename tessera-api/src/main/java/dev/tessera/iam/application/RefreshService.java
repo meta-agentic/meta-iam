@@ -331,7 +331,9 @@ public final class RefreshService implements RefreshUseCase {
         // confirmation bound at original issuance — which needs the confirmation persisted
         // on the refresh-token family. Until then the rotated access token is an unbound
         // Bearer.
-        Uni<String> accessUni = signer.sign(authoritativeRealm, "at+jwt", accessClaims);
+        // The realm claims are stamped last, as on every access token (ADR-IAM-003 D4b).
+        Uni<String> accessUni = signer.sign(authoritativeRealm, "at+jwt",
+                IssuedTokenClaims.withRealm(accessClaims, authoritativeRealm));
         Uni<String> idUni = family.grantedScopes().contains("openid")
                 ? ProfileClaims.idToken(userProfiles, issuer, family.userId(), command.clientId(), null,
                                 now, now.plus(idTokenTtl), authoritativeRealm, family.grantedScopes())

@@ -190,7 +190,9 @@ public class JwsAccessTokenIntrospector implements AccessTokenIntrospectorPort {
                 text(c, "scope"),
                 text(c, "jti"),
                 number(c, "iat"),
-                number(c, "exp")));
+                number(c, "exp"),
+                text(c, "realm_tenant"),
+                text(c, "realm_baseline")));
     }
 
     private static String text(JsonNode node, String field) {

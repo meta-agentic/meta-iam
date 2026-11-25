@@ -176,6 +176,28 @@ class IntrospectForgedTokenTest extends AuthorizationCodeFlowSupport {
         assertThat(body).containsEntry("active", true).doesNotContainKeys("iss", "aud");
     }
 
+    @Test
+    @DisplayName("a token signed by the realm key but carrying no realm claims is inactive (ADR-IAM-003 D4b)")
+    void noRealmClaimsIsInactive() {
+        assertInactive(forge("EdDSA", "at+jwt", kid(), payload(ISSUER, ISSUER, null, null), Sig.REALM_EDDSA));
+    }
+
+    @Test
+    @DisplayName("a token signed by the realm key but naming another baseline of the tenant is inactive")
+    void otherBaselineIsInactive() {
+        assertInactive(forge("EdDSA", "at+jwt", kid(),
+                payload(ISSUER, ISSUER, REALM.tenant().value().toString(), UUID.randomUUID().toString()),
+                Sig.REALM_EDDSA));
+    }
+
+    @Test
+    @DisplayName("a token signed by the realm key but naming another tenant is inactive: the claim is a second boundary")
+    void otherTenantIsInactive() {
+        assertInactive(forge("EdDSA", "at+jwt", kid(),
+                payload(ISSUER, ISSUER, UUID.randomUUID().toString(), REALM.baseline().value().toString()),
+                Sig.REALM_EDDSA));
+    }
+
     // --------------------------------------------------------------------- helpers
 
     /** How the third JWS segment is produced. */
@@ -237,12 +259,19 @@ class IntrospectForgedTokenTest extends AuthorizationCodeFlowSupport {
         return B64URL.encodeToString(json.getBytes(StandardCharsets.UTF_8));
     }
 
+    /** A payload that names this test's realm in its realm claims, as every minted access token does. */
     private static String payload(String iss, String aud) {
+        return payload(iss, aud, REALM.tenant().value().toString(), REALM.baseline().value().toString());
+    }
+
+    private static String payload(String iss, String aud, String realmTenant, String realmBaseline) {
         long now = Instant.now().getEpochSecond();
+        String realm = realmTenant == null ? ""
+                : ",\"realm_tenant\":\"" + realmTenant + "\",\"realm_baseline\":\"" + realmBaseline + "\"";
         String json = "{\"iss\":\"" + iss + "\",\"sub\":\"forged-subject\",\"aud\":\"" + aud
                 + "\",\"client_id\":\"" + FakeClientRepository.PUBLIC_CLIENT_ID
                 + "\",\"iat\":" + now + ",\"exp\":" + (now + 300)
-                + ",\"jti\":\"" + UUID.randomUUID() + "\",\"scope\":\"openid\"}";
+                + ",\"jti\":\"" + UUID.randomUUID() + "\",\"scope\":\"openid\"" + realm + "}";
         return B64URL.encodeToString(json.getBytes(StandardCharsets.UTF_8));
     }
 

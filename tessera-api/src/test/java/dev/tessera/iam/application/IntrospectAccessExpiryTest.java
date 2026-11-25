@@ -5,8 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tessera.iam.application.port.in.IntrospectUseCase.IntrospectionResult;
 import dev.tessera.iam.application.port.out.AccessTokenIntrospectorPort.VerifiedAccessToken;
+import dev.tessera.iam.domain.tenancy.BaselineId;
+import dev.tessera.iam.domain.tenancy.RealmKey;
+import dev.tessera.iam.domain.tenancy.TenantId;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,9 +19,13 @@ class IntrospectAccessExpiryTest {
 
     private static final Instant NOW = Instant.parse("2026-11-07T12:00:00Z");
 
+    private static final RealmKey REALM =
+            new RealmKey(new TenantId(UUID.randomUUID()), new BaselineId(new UUID(0L, 0L)));
+
     private static IntrospectionResult introspect(Long exp) {
-        return IntrospectService.introspectAccess(Optional.of(new VerifiedAccessToken(
-                "user-1", "client-1", "openid", "jti-1", NOW.getEpochSecond() - 10, exp)), NOW);
+        return IntrospectService.introspectAccess(REALM, Optional.of(new VerifiedAccessToken(
+                "user-1", "client-1", "openid", "jti-1", NOW.getEpochSecond() - 10, exp,
+                REALM.tenant().value().toString(), REALM.baseline().value().toString())), NOW);
     }
 
     @Test
