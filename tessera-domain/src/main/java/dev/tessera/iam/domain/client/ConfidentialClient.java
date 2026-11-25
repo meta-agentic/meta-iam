@@ -40,6 +40,8 @@ import java.util.Set;
  * @param userAudiences the resources a token issued for a person may name (ADR-IAM-009 D3); each
  *                      an absolute URI with no fragment, never fed by {@code audiences} (never
  *                      {@code null}, may be empty: such a client obtains no token for a person)
+ * @param resourceIdentifier the resource this client is, for the audience comparison at
+ *                      introspection (an absolute URI with no fragment), or {@code null}
  */
 public record ConfidentialClient(
         ClientId id,
@@ -53,7 +55,26 @@ public record ConfidentialClient(
         Set<String> postLogoutRedirectUris,
         SignInTheme signInTheme,
         Set<String> userScopes,
-        Set<String> userAudiences) implements Client {
+        Set<String> userAudiences,
+        String resourceIdentifier) implements Client {
+
+    /** A client that is no resource: at introspection it sees only its own tokens. */
+    public ConfidentialClient(
+            ClientId id,
+            RealmKey realm,
+            Set<GrantType> allowedGrants,
+            ClientAuthMethod authMethod,
+            Set<String> redirectUris,
+            Set<String> allowedScopes,
+            Set<String> audiences,
+            List<String> roles,
+            Set<String> postLogoutRedirectUris,
+            SignInTheme signInTheme,
+            Set<String> userScopes,
+            Set<String> userAudiences) {
+        this(id, realm, allowedGrants, authMethod, redirectUris, allowedScopes, audiences, roles,
+                postLogoutRedirectUris, signInTheme, userScopes, userAudiences, null);
+    }
 
     /** A client with no resource registered for tokens issued for a person. */
     public ConfidentialClient(
@@ -160,6 +181,10 @@ public record ConfidentialClient(
         }
         userAudiences.forEach(audience ->
                 require(ResourceIndicators.isResourceIdentifier(audience), "userAudiences", audience));
+        if (resourceIdentifier != null) {
+            require(ResourceIndicators.isResourceIdentifier(resourceIdentifier), "resourceIdentifier",
+                    resourceIdentifier);
+        }
         roles.forEach(role -> require(isToken(role), "roles", role));
         // Defensive copy + unmodifiable view: the record stays immutable even if the
         // caller mutates the set it passed in.

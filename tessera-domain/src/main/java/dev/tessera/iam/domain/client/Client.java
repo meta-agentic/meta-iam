@@ -87,4 +87,16 @@ public sealed interface Client permits ConfidentialClient, PublicClient {
      * @return an immutable view of the registered user audiences
      */
     Set<String> userAudiences();
+
+    /**
+     * The resource this client is, for the audience comparison at introspection (ADR-IAM-009 D3,
+     * {@code oauth_client.resource_identifier}): an introspecting client gets {@code active: true}
+     * for an access token only if this is in its {@code aud}, or the token was issued to it.
+     *
+     * @return the identifier, or {@code null} for a client that is no resource (it then sees only
+     *         its own tokens). A public client cannot introspect and has none.
+     */
+    default String resourceIdentifier() {
+        return null;
+    }
 }

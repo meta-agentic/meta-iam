@@ -3,6 +3,8 @@ package dev.tessera.iam.application.port.in;
 import dev.tessera.iam.domain.client.ClientSecretPresentation;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import io.smallrye.mutiny.Uni;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Inbound port for the token-introspection endpoint ({@code POST /introspect}, RFC 7662).
@@ -115,6 +117,9 @@ public interface IntrospectUseCase {
      * @param exp       expiry (epoch seconds), or {@code null}
      * @param iat       issuance (epoch seconds), or {@code null}
      * @param jti       token id, or {@code null}
+     * @param issuer    the {@code iss} of an access token, or {@code null}
+     * @param audience  the {@code aud} of an access token (empty for none)
+     * @param confirmation the {@code cnf} of a bound access token, or {@code null}
      */
     record ActiveToken(
             String scope,
@@ -123,6 +128,20 @@ public interface IntrospectUseCase {
             String tokenType,
             Long exp,
             Long iat,
-            String jti) {
+            String jti,
+            String issuer,
+            List<String> audience,
+            Map<String, Object> confirmation) {
+
+        public ActiveToken {
+            audience = audience == null ? List.of() : List.copyOf(audience);
+            confirmation = confirmation == null ? null : Map.copyOf(confirmation);
+        }
+
+        /** A token for which no {@code iss}, {@code aud} or {@code cnf} is reported (a refresh token). */
+        public ActiveToken(String scope, String clientId, String subject, String tokenType, Long exp, Long iat,
+                String jti) {
+            this(scope, clientId, subject, tokenType, exp, iat, jti, null, List.of(), null);
+        }
     }
 }

@@ -273,9 +273,11 @@ public class UseCaseProducer {
             ClientAssertionVerifierPort assertionVerifier,
             RefreshTokenStorePort refreshStore,
             AccessTokenIntrospectorPort accessTokens,
-            Clock clock) {
+            Clock clock,
+            OidcDiscoveryConfig oidc) {
         return new IntrospectService(
-                clients, secretVerifier, keySource, assertionVerifier, refreshStore, accessTokens, clock, profiles);
+                clients, secretVerifier, keySource, assertionVerifier, refreshStore, accessTokens, clock, profiles,
+                oidc.issuer());
     }
 
     @Produces

@@ -50,7 +50,7 @@ class IntrospectForgedTokenTest extends AuthorizationCodeFlowSupport {
     @Test
     @DisplayName("control: a well-formed EdDSA at+jwt signed by the realm key is active")
     void controlTokenIsActive() {
-        introspect(forge("EdDSA", "at+jwt", kid(), payload(ISSUER, ISSUER), Sig.REALM_EDDSA))
+        introspect(forge("EdDSA", "at+jwt", kid(), payload(ISSUER, FakeClientRepository.USER_API), Sig.REALM_EDDSA))
                 .then().statusCode(200)
                 .body("active", org.hamcrest.Matchers.is(true));
     }
@@ -165,15 +165,27 @@ class IntrospectForgedTokenTest extends AuthorizationCodeFlowSupport {
      * neither. Deciding to compare {@code iss} at introspection flips this test on purpose.
      */
     @Test
-    @DisplayName("today introspection asserts neither iss nor aud and echoes neither")
-    void issAndAudAreNotAssertedByIntrospection() {
-        String token = forge("EdDSA", "at+jwt", kid(),
-                payload("https://other-issuer.example", "https://other-resource.example"),
-                Sig.REALM_EDDSA);
+    @DisplayName("threat row 14: a realm-key-signed token with a foreign iss is inactive")
+    void foreignIssuerIsInactive() {
+        assertInactive(forge("EdDSA", "at+jwt", kid(),
+                payload("https://other-issuer.example", FakeClientRepository.USER_API), Sig.REALM_EDDSA));
+    }
 
-        Map<String, Object> body = introspect(token).then().statusCode(200)
-                .extract().jsonPath().getMap("$");
-        assertThat(body).containsEntry("active", true).doesNotContainKeys("iss", "aud");
+    @Test
+    @DisplayName("threat row 14: a realm-key-signed token for another resource is inactive to a caller that is not its client")
+    void foreignAudienceIsInactive() {
+        assertInactive(forge("EdDSA", "at+jwt", kid(),
+                payload(ISSUER, "https://other-resource.example"), Sig.REALM_EDDSA));
+    }
+
+    @Test
+    @DisplayName("an active response echoes iss and aud (ADR-IAM-009 D3)")
+    void activeResponseEchoesIssAndAud() {
+        Map<String, Object> body = introspect(forge("EdDSA", "at+jwt", kid(),
+                        payload(ISSUER, FakeClientRepository.USER_API), Sig.REALM_EDDSA))
+                .then().statusCode(200).extract().jsonPath().getMap("$");
+        assertThat(body).containsEntry("active", true).containsEntry("iss", ISSUER)
+                .containsEntry("aud", FakeClientRepository.USER_API).containsEntry("token_type", "Bearer");
     }
 
     @Test

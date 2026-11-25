@@ -32,9 +32,12 @@ public record IntrospectionResponseDto(
         @JsonProperty("token_type") String tokenType,
         @JsonProperty("exp") Long exp,
         @JsonProperty("iat") Long iat,
-        @JsonProperty("jti") String jti) {
+        @JsonProperty("jti") String jti,
+        @JsonProperty("iss") String iss,
+        @JsonProperty("aud") Object aud,
+        @JsonProperty("cnf") java.util.Map<String, Object> cnf) {
 
     /** The canonical inactive response — {@code {"active": false}} and nothing else. */
     public static final IntrospectionResponseDto INACTIVE =
-            new IntrospectionResponseDto(false, null, null, null, null, null, null, null);
+            new IntrospectionResponseDto(false, null, null, null, null, null, null, null, null, null, null);
 }

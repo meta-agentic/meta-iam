@@ -122,6 +122,7 @@ class DbClientRepositoryIT {
             OAuthClientEntity entity = confidential(tenant, clientId, "web-app", hash);
             entity.userScopes = "profile offline_access";
             entity.userAudiences = "https://a.api.example https://b.api.example";
+            entity.resourceIdentifier = "https://web-app.api.example";
             return s.persist(entity).call(s::flush);
         }));
 
@@ -136,6 +137,8 @@ class DbClientRepositoryIT {
                     // V19's column round-trips too.
                     org.assertj.core.api.Assertions.assertThat(client.userAudiences())
                             .containsExactly("https://a.api.example", "https://b.api.example");
+                    org.assertj.core.api.Assertions.assertThat(client.resourceIdentifier())
+                            .isEqualTo("https://web-app.api.example");
                     org.assertj.core.api.Assertions.assertThat(client.id().value()).isEqualTo(clientId);
                     org.assertj.core.api.Assertions.assertThat(client.redirectUris())
                             .containsExactly("https://client.example/callback");

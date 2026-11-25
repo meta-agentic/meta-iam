@@ -53,36 +53,34 @@ class IntrospectFlowTest {
                 .body("active", Matchers.is(true))
                 .body("sub", Matchers.equalTo(subject))
                 .body("client_id", Matchers.equalTo(TOKEN_CLIENT))
-                .body("token_type", Matchers.equalTo("Bearer"))
+                // The true token type: the public client's token is DPoP-bound (ADR-IAM-009 D3).
+                .body("token_type", Matchers.equalTo("DPoP"))
+                .body("iss", Matchers.equalTo("https://issuer.test.example"))
+                .body("aud", Matchers.equalTo(FakeClientRepository.USER_API))
+                .body("cnf.jkt", Matchers.notNullValue())
                 .body("scope", Matchers.containsString("openid"))
                 .body("exp", Matchers.notNullValue())
                 .body("iat", Matchers.notNullValue());
     }
 
     @Test
-    @DisplayName("a live refresh token is active with sub (no client_id); a superseded one is inactive")
-    void activeRefreshTokenAndSupersededInactive() {
+    @DisplayName("a public client's refresh token is inactive to every caller, before and after rotation (ADR-IAM-009 D3)")
+    void publicClientsRefreshTokenIsInactiveToEveryCaller() {
         String tenant = UUID.randomUUID().toString();
         String subject = UUID.randomUUID().toString();
         Tokens tokens = issue(tenant, subject);
 
+        // A refresh token has no aud: it is active only to the client it was issued to, and a public
+        // client cannot introspect. A confidential caller learns nothing about it.
         introspect(tenant, CALLER, CALLER_SECRET, tokens.refreshToken()).then()
-                .statusCode(200)
-                .body("active", Matchers.is(true))
-                .body("sub", Matchers.equalTo(subject))
-                // A refresh family stores only the client's surrogate id, not the wire client_id,
-                // so client_id is omitted for a refresh token (unlike the access-token path).
-                .body("client_id", Matchers.nullValue());
+                .statusCode(200).body("active", Matchers.is(false)).body("sub", Matchers.nullValue());
 
-        // Rotate: redeeming the refresh token supersedes it and mints a new one.
         String rotated = refresh(tenant, tokens.refreshToken()).then().statusCode(200)
                 .extract().jsonPath().getString("refresh_token");
-
-        // The superseded token is no longer active; the rotated one is.
         introspect(tenant, CALLER, CALLER_SECRET, tokens.refreshToken()).then()
                 .statusCode(200).body("active", Matchers.is(false));
         introspect(tenant, CALLER, CALLER_SECRET, rotated).then()
-                .statusCode(200).body("active", Matchers.is(true));
+                .statusCode(200).body("active", Matchers.is(false));
     }
 
     @Test
@@ -118,9 +116,11 @@ class IntrospectFlowTest {
         introspect(tenantB, CALLER, CALLER_SECRET, tokens.refreshToken()).then()
                 .statusCode(200).body("active", Matchers.is(false));
 
-        // Still active in its own tenant.
+        // In its own tenant it is inactive to this caller too: it was issued to a public client, and a
+        // refresh token is active only to its own client (ADR-IAM-009 D3). The tenant boundary of the
+        // store is pinned in RefreshTokenStoreIT.
         introspect(tenantA, CALLER, CALLER_SECRET, tokens.refreshToken()).then()
-                .statusCode(200).body("active", Matchers.is(true));
+                .statusCode(200).body("active", Matchers.is(false));
     }
 
     // The ACCESS-token cross-tenant boundary is cryptographic, not store-scoped: a token verifies
@@ -187,13 +187,15 @@ class IntrospectFlowTest {
     }
 
     @Test
-    @DisplayName("a confidential client authenticated by HTTP Basic introspects the same tokens as active")
+    @DisplayName("a confidential client authenticated by HTTP Basic introspects as a secret-post one does")
     void confidentialClientByBasicIsAccepted() {
         String tenant = UUID.randomUUID().toString();
         Tokens tokens = issue(tenant, UUID.randomUUID().toString());
         String basic = "Basic " + Base64.getEncoder().encodeToString(
                 (FakeClientRepository.BASIC_ONLY_CLIENT_ID + ":" + CALLER_SECRET).getBytes(StandardCharsets.UTF_8));
 
+        // The access token is for the resource this client is, so it is active to it; the refresh
+        // token was issued to another (public) client, so it is not (ADR-IAM-009 D3).
         for (String token : new String[] {tokens.accessToken(), tokens.refreshToken()}) {
             given().config(noFollow())
                     .header("X-Tenant-Id", tenant)
@@ -201,7 +203,7 @@ class IntrospectFlowTest {
                     .contentType("application/x-www-form-urlencoded")
                     .formParam("token", token)
                     .when().post("/introspect")
-                    .then().statusCode(200).body("active", Matchers.is(true));
+                    .then().statusCode(200).body("active", Matchers.is(token.equals(tokens.accessToken())));
         }
     }
 

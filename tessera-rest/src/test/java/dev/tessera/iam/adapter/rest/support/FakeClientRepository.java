@@ -131,7 +131,9 @@ public class FakeClientRepository implements ClientRepositoryPort {
                     USER_AUDIENCES);
             case CONFIDENTIAL_CLIENT_ID -> new ConfidentialClient(
                     CONFIDENTIAL_IDENTITY, realm, CODE_GRANT, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS,
-                    Set.of(), Set.of(), List.of(), Set.of(), null, USER_SCOPES, USER_AUDIENCES);
+                    Set.of(), Set.of(), List.of(), Set.of(), null, USER_SCOPES, USER_AUDIENCES,
+                    // The resource it is (ADR-IAM-009 D3): it introspects tokens issued for USER_API.
+                    USER_API);
             case NO_CODE_CLIENT_ID -> new ConfidentialClient(
                     NO_CODE_IDENTITY, realm, ONLY_CLIENT_CREDENTIALS, ClientAuthMethod.CLIENT_SECRET_POST, REDIRECTS);
             case REFRESH_CLIENT_ID -> new PublicClient(
@@ -165,7 +167,7 @@ public class FakeClientRepository implements ClientRepositoryPort {
     private static Client byMethod(RealmKey realm, ClientAuthMethod method) {
         return new ConfidentialClient(CONFIDENTIAL_IDENTITY, realm,
                 Set.of(new AuthorizationCode(), new ClientCredentials(), new RefreshToken()), method, REDIRECTS,
-                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES, Set.of(), null, USER_SCOPES, USER_AUDIENCES);
+                MACHINE_SCOPES, MACHINE_AUDIENCES, MACHINE_ROLES, Set.of(), null, USER_SCOPES, USER_AUDIENCES, USER_API);
     }
 
     private static Client themed(RealmKey realm, String theme) {
