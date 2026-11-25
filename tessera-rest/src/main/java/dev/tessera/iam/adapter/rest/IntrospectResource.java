@@ -108,7 +108,12 @@ public class IntrospectResource {
                 token.tokenType(),
                 token.exp(),
                 token.iat(),
-                token.jti());
+                token.jti(),
+                token.issuer(),
+                // aud as RFC 7662 §2.2 allows: a string for one audience, an array for several.
+                token.audience().isEmpty() ? null
+                        : token.audience().size() == 1 ? token.audience().getFirst() : token.audience(),
+                token.confirmation());
     }
 
     private static Response ok(IntrospectionResponseDto body) {

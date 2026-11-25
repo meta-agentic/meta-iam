@@ -58,6 +58,13 @@ Accumulating toward the first release, `26.1.0 "Andromeda"`.
   introspection results rather than introspect every request.
 
 ### Changed
+- **Introspection answers per audience (ADR-IAM-009 D3).** An access token is active only to a
+  caller whose `oauth_client.resource_identifier` is in its `aud`, or to the client it was issued
+  to, and only if its `iss` is the realm's; a refresh token is active only to its own client, so a
+  public client's refresh tokens are inactive to every caller. The active response now echoes
+  `iss`, `aud`, `cnf` and the true `token_type` (`DPoP` or `Bearer`). Threat-model row 14 is
+  pinned. **Part of the cut-over:** a resource server that introspects other clients' tokens needs
+  its `resource_identifier` before this release is deployed.
 - **Every access token carries its realm, and introspection compares it (ADR-IAM-003 D4b).** The
   authorization-code and refresh paths now stamp `realm_tenant` and `realm_baseline`, as
   `client_credentials` already did; the signer refuses an access token without them. `/introspect`

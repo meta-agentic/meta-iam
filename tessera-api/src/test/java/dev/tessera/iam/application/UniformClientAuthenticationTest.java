@@ -107,7 +107,8 @@ class UniformClientAuthenticationTest {
 
     private IntrospectionResult introspect(RealmKey realm, String clientId, String secret) {
         verified.clear();
-        return new IntrospectService(clients, verifier, keys, assertions, refreshStore, accessTokens, Clock.systemUTC(), StandardProfiles.CHECK)
+        return new IntrospectService(clients, verifier, keys, assertions, refreshStore, accessTokens, Clock.systemUTC(), StandardProfiles.CHECK,
+                "https://issuer.test")
                 .introspect(new IntrospectCommand(realm, "a.b.c", null, clientId, secret))
                 .await().indefinitely();
     }

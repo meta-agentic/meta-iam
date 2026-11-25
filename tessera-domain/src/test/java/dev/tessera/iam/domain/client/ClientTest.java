@@ -97,4 +97,16 @@ class ClientTest {
                 ClientId.generate(), realm(), Set.of(new AuthorizationCode()), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("a resource identifier is an absolute URI with no fragment, or absent")
+    void resourceIdentifierIsValidatedOrAbsent() {
+        ConfidentialClient withNone = new ConfidentialClient(ClientId.generate(), realm(),
+                Set.of(new AuthorizationCode()), ClientAuthMethod.CLIENT_SECRET_BASIC, Set.of());
+        org.assertj.core.api.Assertions.assertThat(withNone.resourceIdentifier()).isNull();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new ConfidentialClient(ClientId.generate(), realm(),
+                Set.of(new AuthorizationCode()), ClientAuthMethod.CLIENT_SECRET_BASIC, Set.of(), Set.of(), Set.of(),
+                java.util.List.of(), Set.of(), null, Set.of(), Set.of(), "not a uri#frag"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

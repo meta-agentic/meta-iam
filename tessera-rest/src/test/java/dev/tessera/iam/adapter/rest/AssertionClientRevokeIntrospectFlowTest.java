@@ -165,7 +165,10 @@ class AssertionClientRevokeIntrospectFlowTest extends AuthorizationCodeFlowSuppo
                 .statusCode(401).body("error", Matchers.equalTo("invalid_client"));
 
         // None of the refused requests revoked the family.
-        introspectAsMachine(refresh).then().statusCode(200).body("active", Matchers.is(true));
+        // Still live: its owner, with a fresh assertion, sees it active (a refresh token is active only
+        // to the client it was issued to, ADR-IAM-009 D3).
+        withAssertion(TENANT_OF_CLIENT, "/introspect", assertion(), refresh).then()
+                .statusCode(200).body("active", Matchers.is(true));
     }
 
     @Test
@@ -184,7 +187,10 @@ class AssertionClientRevokeIntrospectFlowTest extends AuthorizationCodeFlowSuppo
                     .when().post("/token")
                     .then().statusCode(401).body("error", Matchers.equalTo("invalid_client"));
         }
-        introspectAsMachine(refresh).then().statusCode(200).body("active", Matchers.is(true));
+        // Still live: its owner, with a fresh assertion, sees it active (a refresh token is active only
+        // to the client it was issued to, ADR-IAM-009 D3).
+        withAssertion(TENANT_OF_CLIENT, "/introspect", assertion(), refresh).then()
+                .statusCode(200).body("active", Matchers.is(true));
     }
 
     @Test
@@ -204,7 +210,10 @@ class AssertionClientRevokeIntrospectFlowTest extends AuthorizationCodeFlowSuppo
                     .then().statusCode(400).header("Cache-Control", "no-store")
                     .body("error", Matchers.equalTo("invalid_request"));
         }
-        introspectAsMachine(refresh).then().statusCode(200).body("active", Matchers.is(true));
+        // Still live: its owner, with a fresh assertion, sees it active (a refresh token is active only
+        // to the client it was issued to, ADR-IAM-009 D3).
+        withAssertion(TENANT_OF_CLIENT, "/introspect", assertion(), refresh).then()
+                .statusCode(200).body("active", Matchers.is(true));
     }
 
     @Test
@@ -220,6 +229,7 @@ class AssertionClientRevokeIntrospectFlowTest extends AuthorizationCodeFlowSuppo
                     .when().post(endpoint)
                     .then().statusCode(401).body("error", Matchers.equalTo("invalid_client"));
         }
+        // Still live: its owner, the machine client, sees it active.
         introspectAsMachine(refresh).then().statusCode(200).body("active", Matchers.is(true));
     }
 
@@ -234,7 +244,10 @@ class AssertionClientRevokeIntrospectFlowTest extends AuthorizationCodeFlowSuppo
         withAssertion(otherTenant, "/introspect", assertion(), refresh).then()
                 .statusCode(401).body("error", Matchers.equalTo("invalid_client"));
 
-        introspectAsMachine(refresh).then().statusCode(200).body("active", Matchers.is(true));
+        // Still live: its owner, with a fresh assertion, sees it active (a refresh token is active only
+        // to the client it was issued to, ADR-IAM-009 D3).
+        withAssertion(TENANT_OF_CLIENT, "/introspect", assertion(), refresh).then()
+                .statusCode(200).body("active", Matchers.is(true));
     }
 
     @Test

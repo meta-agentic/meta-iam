@@ -2,6 +2,8 @@ package dev.tessera.iam.application.port.out;
 
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import io.smallrye.mutiny.Uni;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -42,6 +44,9 @@ public interface AccessTokenIntrospectorPort {
      * @param expiresAt the {@code exp} claim (epoch seconds), or {@code null}
      * @param realmTenant   the {@code realm_tenant} claim, or {@code null} if absent
      * @param realmBaseline the {@code realm_baseline} claim, or {@code null} if absent
+     * @param issuer        the {@code iss} claim, or {@code null} if absent
+     * @param audience      the {@code aud} claim, a string or an array, as a list (empty if absent)
+     * @param confirmation  the {@code cnf} claim, or {@code null} if absent
      */
     record VerifiedAccessToken(
             String subject,
@@ -51,12 +56,36 @@ public interface AccessTokenIntrospectorPort {
             Long issuedAt,
             Long expiresAt,
             String realmTenant,
-            String realmBaseline) {
+            String realmBaseline,
+            String issuer,
+            List<String> audience,
+            Map<String, Object> confirmation) {
+
+        public VerifiedAccessToken {
+            audience = audience == null ? List.of() : List.copyOf(audience);
+            confirmation = confirmation == null ? null : Map.copyOf(confirmation);
+        }
 
         /** A token that carries no realm claims: introspection reports it inactive. */
         public VerifiedAccessToken(
                 String subject, String clientId, String scope, String jti, Long issuedAt, Long expiresAt) {
             this(subject, clientId, scope, jti, issuedAt, expiresAt, null, null);
+        }
+
+        /** A token whose {@code iss}, {@code aud} and {@code cnf} are not read. */
+        public VerifiedAccessToken(
+                String subject, String clientId, String scope, String jti, Long issuedAt, Long expiresAt,
+                String realmTenant, String realmBaseline) {
+            this(subject, clientId, scope, jti, issuedAt, expiresAt, realmTenant, realmBaseline, null, List.of(),
+                    null);
+        }
+
+        /**
+         * The true token type: {@code DPoP} when the token is bound to a DPoP key ({@code cnf.jkt},
+         * RFC 9449 §6), otherwise {@code Bearer}, including a certificate-bound one (RFC 8705).
+         */
+        public String tokenType() {
+            return confirmation != null && confirmation.containsKey("jkt") ? "DPoP" : "Bearer";
         }
 
         /**

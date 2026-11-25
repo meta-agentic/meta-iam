@@ -192,7 +192,10 @@ public class JwsAccessTokenIntrospector implements AccessTokenIntrospectorPort {
                 number(c, "iat"),
                 number(c, "exp"),
                 text(c, "realm_tenant"),
-                text(c, "realm_baseline")));
+                text(c, "realm_baseline"),
+                text(c, "iss"),
+                audience(c.get("aud")),
+                confirmation(c.get("cnf"))));
     }
 
     private static String text(JsonNode node, String field) {
@@ -215,5 +218,38 @@ public class JwsAccessTokenIntrospector implements AccessTokenIntrospectorPort {
 
     /** The JOSE header members this verifier reads. */
     private record Header(String alg, String typ, String kid) {
+    }
+
+    /** {@code aud} as a list: a string is one audience, an array of strings is several (RFC 7519 §4.1.3). */
+    private static java.util.List<String> audience(JsonNode aud) {
+        if (aud == null) {
+            return java.util.List.of();
+        }
+        if (aud.isTextual()) {
+            return java.util.List.of(aud.asText());
+        }
+        java.util.List<String> values = new java.util.ArrayList<>();
+        if (aud.isArray()) {
+            aud.forEach(value -> {
+                if (value.isTextual()) {
+                    values.add(value.asText());
+                }
+            });
+        }
+        return values;
+    }
+
+    /** {@code cnf} with its string members ({@code jkt}, {@code x5t#S256}), or {@code null} if absent. */
+    private static java.util.Map<String, Object> confirmation(JsonNode cnf) {
+        if (cnf == null || !cnf.isObject()) {
+            return null;
+        }
+        java.util.Map<String, Object> members = new java.util.LinkedHashMap<>();
+        cnf.properties().forEach(entry -> {
+            if (entry.getValue().isTextual()) {
+                members.put(entry.getKey(), entry.getValue().asText());
+            }
+        });
+        return members;
     }
 }

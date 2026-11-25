@@ -1,5 +1,6 @@
 package dev.tessera.iam.application;
 
+import dev.tessera.iam.domain.client.Client;
 import dev.tessera.iam.domain.client.ClientUse;
 import dev.tessera.iam.application.port.in.IntrospectUseCase;
 import dev.tessera.iam.application.port.out.AccessTokenIntrospectorPort;
@@ -14,6 +15,8 @@ import dev.tessera.iam.application.refresh.RefreshTokenCodec;
 import dev.tessera.iam.domain.refresh.RefreshTokenFamily;
 import dev.tessera.iam.domain.tenancy.RealmKey;
 import io.smallrye.mutiny.Uni;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -59,6 +62,7 @@ public final class IntrospectService implements IntrospectUseCase {
     private final RefreshTokenStorePort refreshStore;
     private final AccessTokenIntrospectorPort accessTokens;
     private final Clock clock;
+    private final String issuer;
 
     public IntrospectService(
             ClientRepositoryPort clients,
@@ -68,10 +72,15 @@ public final class IntrospectService implements IntrospectUseCase {
             RefreshTokenStorePort refreshStore,
             AccessTokenIntrospectorPort accessTokens,
             Clock clock,
-            ClientProfileCheck profiles) {
+            ClientProfileCheck profiles,
+            String issuer) {
         if (profiles == null) {
             throw new IllegalArgumentException("profiles must not be null");
         }
+        if (issuer == null || issuer.isBlank()) {
+            throw new IllegalArgumentException("issuer must not be blank");
+        }
+        this.issuer = issuer;
         this.profiles = profiles;
         this.clients = requireNonNull(clients, "clients");
         this.secretVerifier = requireNonNull(secretVerifier, "secretVerifier");
@@ -96,35 +105,40 @@ public final class IntrospectService implements IntrospectUseCase {
                                 command.clientSecret(), command.secretPresentation(), command.clientAssertion(), false)
                         .flatMap(authenticated -> profiles.andConforms(
                                 authenticated, command.realm(), client, ClientUse.ACTS_FOR_ITSELF))
-                        .flatMap(ok -> ok ? servedOrInactive(command) : authFailed()));
+                        .flatMap(ok -> ok ? servedOrInactive(command, client) : authFailed()));
     }
 
     // A suspended tenant's tokens are reported inactive, after its caller authenticated
     // (ADR-IAM-003 D1 consequence 2; ADR-IAM-011 D5's suspended row), so suspension bites at once
     // for every resource server that introspects, not only once the token expires.
-    private Uni<IntrospectionResult> servedOrInactive(IntrospectCommand command) {
+    private Uni<IntrospectionResult> servedOrInactive(IntrospectCommand command, Client caller) {
         return profiles.isServed(command.realm())
-                .flatMap(served -> served ? classify(command) : Uni.createFrom().item(inactive()));
+                .flatMap(served -> served ? classify(command, caller) : Uni.createFrom().item(inactive()));
     }
 
-    private Uni<IntrospectionResult> classify(IntrospectCommand command) {
+    private Uni<IntrospectionResult> classify(IntrospectCommand command, Client caller) {
         Instant now = clock.instant();
         // An opaque refresh token has exactly one '.' and a 16-byte family id; a JWT (two '.') never
         // parses here, so the ordering unambiguously routes each kind.
         Optional<RefreshTokenCodec.Parsed> refresh = RefreshTokenCodec.parse(command.token());
         if (refresh.isPresent()) {
-            return introspectRefresh(command.realm(), refresh.get(), now);
+            return introspectRefresh(command.realm(), refresh.get(), caller, now);
         }
         return accessTokens.verify(command.realm(), command.token())
-                .map(verified -> introspectAccess(command.realm(), verified, now));
+                .map(verified -> introspectAccess(command.realm(), issuer, caller, command.clientId(), verified, now));
     }
 
     private Uni<IntrospectionResult> introspectRefresh(
-            RealmKey realm, RefreshTokenCodec.Parsed parsed, Instant now) {
+            RealmKey realm, RefreshTokenCodec.Parsed parsed, Client caller, Instant now) {
         return refreshStore.find(parsed.id(), realm).map(family -> {
             // Realm-equality is explicit (belt-and-braces): the store scopes by tenant, but the
             // isolation unit is (tenant, baseline) — never report a same-tenant/other-baseline family.
             if (family == null || !family.realm().equals(realm)) {
+                return inactive();
+            }
+            // ADR-IAM-009 D3: a refresh token has no aud, so it is active only to the client it was
+            // issued to. A public client cannot introspect, so its refresh tokens are inactive to all.
+            if (!family.clientId().equals(caller.id())) {
                 return inactive();
             }
             if (family.reused() || family.isExpired(now)) {
@@ -139,6 +153,17 @@ public final class IntrospectService implements IntrospectUseCase {
     }
 
     static IntrospectionResult introspectAccess(RealmKey realm, Optional<VerifiedAccessToken> verified, Instant now) {
+        return introspectAccess(realm, null, null, null, verified, now);
+    }
+
+    /**
+     * @param issuer         this realm's issuer; a token whose {@code iss} differs is inactive.
+     *                       {@code null} skips the iss and audience checks (the realm-only overload)
+     * @param caller         the authenticated introspecting client
+     * @param callerClientId its wire {@code client_id}
+     */
+    static IntrospectionResult introspectAccess(RealmKey realm, String issuer, Client caller, String callerClientId,
+            Optional<VerifiedAccessToken> verified, Instant now) {
         if (verified.isEmpty()) {
             return inactive();
         }
@@ -153,6 +178,24 @@ public final class IntrospectService implements IntrospectUseCase {
         // A token without exp has no lifetime to bound it, so it is never active.
         if (v.expiresAt() == null || now.getEpochSecond() >= v.expiresAt()) {
             return inactive();
+        }
+        if (issuer != null) {
+            // ADR-IAM-003 D4b: the token's iss must be this realm's issuer.
+            if (!sameText(issuer, v.issuer())) {
+                return inactive();
+            }
+            // ADR-IAM-009 D3 (RFC 7662 §4): active only to the token's audience, or to the client it
+            // was issued to. A caller that is no resource sees only its own tokens. The binding is not
+            // checked here; the call carries no proof (RFC 9449 §6.2), so the resource server checks
+            // cnf and token_type against its own request.
+            boolean audience = caller.resourceIdentifier() != null
+                    && v.audience().stream().anyMatch(aud -> sameText(caller.resourceIdentifier(), aud));
+            boolean issuedToCaller = sameText(callerClientId, v.clientId());
+            if (!audience && !issuedToCaller) {
+                return inactive();
+            }
+            return active(new ActiveToken(v.scope(), v.clientId(), v.subject(), v.tokenType(), v.expiresAt(),
+                    v.issuedAt(), v.jti(), v.issuer(), v.audience(), v.confirmation()));
         }
         return active(new ActiveToken(
                 v.scope(), v.clientId(), v.subject(), "Bearer", v.expiresAt(), v.issuedAt(), v.jti()));
@@ -186,5 +229,15 @@ public final class IntrospectService implements IntrospectUseCase {
             throw new IllegalArgumentException(name + " must not be null");
         }
         return value;
+    }
+
+    /**
+     * Exact string equality without an early exit, as every comparison in this class is
+     * ({@code ConstantTimeComparisonArchTest}); {@code null} never matches.
+     */
+    private static boolean sameText(String expected, String presented) {
+        return expected != null && presented != null
+                && MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),
+                        presented.getBytes(StandardCharsets.UTF_8));
     }
 }

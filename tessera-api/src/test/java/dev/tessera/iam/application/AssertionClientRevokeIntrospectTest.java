@@ -163,7 +163,7 @@ class AssertionClientRevokeIntrospectTest {
             String token) {
         clearCalls();
         return new IntrospectService(clients, secrets, keys, assertions, refreshStore, accessTokens,
-                Clock.systemUTC(), StandardProfiles.CHECK)
+                Clock.systemUTC(), StandardProfiles.CHECK, "https://issuer.test")
                 .introspect(new IntrospectCommand(realm, token, null, clientId, secret, assertion))
                 .await().indefinitely();
     }
@@ -199,7 +199,9 @@ class AssertionClientRevokeIntrospectTest {
 
         assertThat(introspect(REALM, "keyed", null, GOOD, token)).isInstanceOf(IntrospectionResult.Active.class);
         assertThat(assertionChecks).containsExactly(new Check(REALM, KEYED_TRUST, GOOD));
-        assertThat(introspect(REALM, "workload", null, GOOD, token)).isInstanceOf(IntrospectionResult.Active.class);
+        // The workload client authenticates by its assertion, and the keyed client's refresh token is
+        // inactive to it: a refresh token is active only to the client it was issued to (ADR-IAM-009 D3).
+        assertThat(introspect(REALM, "workload", null, GOOD, token)).isInstanceOf(IntrospectionResult.Inactive.class);
         assertThat(assertionChecks).containsExactly(new Check(REALM, WORKLOAD_TRUST, GOOD));
         assertThat(secretChecks).isEmpty();
 

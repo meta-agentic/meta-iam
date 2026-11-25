@@ -48,7 +48,7 @@ final class OAuthClientMapper {
             case CONFIDENTIAL -> new ConfidentialClient(id, realm, grants, authMethod(entity), redirectUris,
                     parseWhitespaceList(entity.allowedScopes), parseWhitespaceList(entity.audiences),
                     List.copyOf(parseWhitespaceList(entity.roles)), postLogoutRedirectUris, theme, userScopes,
-                    userAudiences);
+                    userAudiences, entity.resourceIdentifier);
             case PUBLIC -> new PublicClient(id, realm, grants, redirectUris, postLogoutRedirectUris, theme, userScopes,
                     userAudiences);
         };
